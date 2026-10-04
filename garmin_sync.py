@@ -11,7 +11,7 @@ def sync_garmin():
         
         # In the HA Add-on, the /config folder is mapped, so we look there first.
         # Fallback to local directory for testing.
-        token_path = "/config/garmin_tokens" if os.path.exists("/config/garmin_tokens") else "garmin_tokens"
+        token_path = "/config/garmin_tokens.json" if os.path.exists("/config/garmin_tokens.json") else "garmin_tokens.json"
         
         # Load the OAuth session token
         garth.client.load(token_path)
