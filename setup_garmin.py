@@ -5,6 +5,10 @@ from garminconnect import Garmin
 
 TOKEN_FILE = "garmin_tokens.json"
 
+def get_mfa():
+    """Prompt the user for their Garmin MFA code."""
+    return input("Garmin MFA Code: ")
+
 def setup_garmin_auth():
     print("=== Garmin MFA Setup ===")
     print("This script runs ONE TIME on your laptop to generate an OAuth session token.")
@@ -14,9 +18,8 @@ def setup_garmin_auth():
     password = getpass.getpass("Garmin Password: ")
     
     try:
-        # Initialize client (this triggers MFA if enabled)
-        # Note: If MFA is required, the garminconnect library handles the prompt in the terminal
-        client = Garmin(email, password)
+        # Initialize client and pass the MFA callback function
+        client = Garmin(email, password, prompt_mfa=get_mfa)
         client.login()
         
         # Save the tokens to a file
