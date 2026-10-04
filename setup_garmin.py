@@ -1,5 +1,4 @@
 import getpass
-import json
 import os
 from garminconnect import Garmin
 
@@ -22,15 +21,8 @@ def setup_garmin_auth():
         client = Garmin(email, password, prompt_mfa=get_mfa)
         client.login()
         
-        # Save the tokens to a file
-        tokens = {
-            "oauth1_token": client.oauth1_token,
-            "oauth1_token_secret": client.oauth1_token_secret,
-            "oauth2_token": client.oauth2_token
-        }
-        
-        with open(TOKEN_FILE, "w") as f:
-            json.dump(tokens, f)
+        # Save the tokens to a file using the internal client's dump method
+        client.client.dump(TOKEN_FILE)
             
         print(f"\n✅ SUCCESS! Session saved to '{TOKEN_FILE}'.")
         print("You can now safely remove your password from your mind.")
