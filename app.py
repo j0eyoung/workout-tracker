@@ -96,41 +96,8 @@ with tab2:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # File uploader for form analysis
-    uploaded_file = st.file_uploader("Upload an image or video of your form for Biomechanical Analysis", type=['jpg', 'jpeg', 'png', 'mp4', 'mov'])
+    # File uploader feature temporarily removed to save build time on ARM hardware.
     file_prompt_injection = ""
-    
-    if uploaded_file is not None:
-        file_ext = uploaded_file.name.split('.')[-1].lower()
-        file_path = f"temp_upload.{file_ext}"
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-            
-        if file_ext in ['mp4', 'mov']:
-            with st.spinner("Extracting keyframes from video for the AI..."):
-                import cv2
-                import os
-                vid = cv2.VideoCapture(file_path)
-                total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
-                # Grab 3 frames: 25%, 50%, and 75% through the movement
-                frame_indices = [int(total_frames * 0.25), int(total_frames * 0.5), int(total_frames * 0.75)]
-                
-                extracted_files = []
-                for i, frame_idx in enumerate(frame_indices):
-                    vid.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-                    ret, frame = vid.read()
-                    if ret:
-                        frame_name = f"frame_{i}.jpg"
-                        cv2.imwrite(frame_name, frame)
-                        extracted_files.append(frame_name)
-                vid.release()
-                
-                st.success(f"Video processed! Extracted {len(extracted_files)} keyframes for analysis.")
-                st.image(extracted_files, caption=["Start", "Mid", "End"], width=200)
-                file_prompt_injection = f"I have uploaded a video of my form. Please look at the following image frames extracted from the video: {', '.join(extracted_files)}. Use the movement-systems framework to critique my form, specifically watching for spinal compression or pelvic tilt given my medical history."
-        else:
-            st.image(file_path, width=300)
-            file_prompt_injection = f"I have uploaded a photo of my form. Please look at the image file located at '{file_path}'. Use the movement-systems framework to critique my form."
 
     if prompt := st.chat_input("E.g., 'My kidney is tight...' or 'Check my squat form.'"):
         
