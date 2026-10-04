@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from engine import WorkoutEngine
 import sqlite3
 
-app = FastAPI(title="AntiGravity Workout API", description="API for Claude Terminal to control HA Workouts")
+app = FastAPI(title="AI Workout API", description="API for Claude Terminal to control HA Workouts")
 engine = WorkoutEngine()
 
 class SymptomLog(BaseModel):

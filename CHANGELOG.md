@@ -2,7 +2,7 @@
 
 ## 0.1.0 - Initial Release (The Megazord AI Coach)
 
-Welcome to the AntiGravity Workout Tracker! This initial release combines five massive AI frameworks into a single, locally-hosted Home Assistant Add-on powered by Claude.
+Welcome to the AI Workout Tracker! This initial release combines five massive AI frameworks into a single, locally-hosted Home Assistant Add-on powered by Claude.
 
 ### 🌟 Features
 * **Garmin Connect Integration:** Natively connects to Garmin to pull Resting Heart Rate, HRV, and recent activity logs securely into a local SQLite database, avoiding enterprise API costs.

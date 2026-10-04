@@ -3,7 +3,7 @@ import json
 import sqlite3
 from engine import WorkoutEngine
 
-st.set_page_config(page_title="AntiGravity Rehab & Training", layout="centered")
+st.set_page_config(page_title="AI Rehab & Training", layout="centered")
 
 engine = WorkoutEngine()
 
@@ -28,7 +28,7 @@ def save_log(rpe, pf, kidney, notes, workout_json):
     conn.close()
     st.success("Workout Logged! The Dynamic Engine will adjust tomorrow's plan.")
 
-st.title("🏂🏊‍♂️ AntiGravity Training Hub")
+st.title("🏂🏊‍♂️ AI Training Hub")
 st.caption("Auto-regulated for Pyeloplasty Rehab & Pelvic Floor Health")
 
 last_log = get_last_log()
