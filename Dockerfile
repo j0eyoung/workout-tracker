@@ -1,13 +1,15 @@
-FROM python:3.11-slim
+FROM node:22-slim
 
 WORKDIR /app
 
-# Install build tools, curl, and Node.js 22 (required by claude-code)
-RUN apt-get update && apt-get install -y curl build-essential && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
+# Install python3 and build tools in the Node 22 image
+RUN apt-get update && apt-get install -y python3 python3-pip python3-venv build-essential && \
     npm install -g @anthropic-ai/claude-code endurance-coach@latest && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create a Python virtual environment (Debian 12 requires venv for pip installs)
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
