@@ -2,8 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Node.js, npm, and build tools needed for native sqlite compilation
-RUN apt-get update && apt-get install -y nodejs npm build-essential && \
+# Install build tools, curl, and Node.js 22 (required by claude-code)
+RUN apt-get update && apt-get install -y curl build-essential && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
     npm install -g @anthropic-ai/claude-code endurance-coach@latest && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
