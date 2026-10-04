@@ -45,7 +45,24 @@ with tab1:
 
     st.subheader("2. Strength & Stability")
     for item in todays_workout["strength"]:
-        st.checkbox(item)
+        st.markdown(f"- {item}")
+
+    st.subheader("📋 Live Set Tracker")
+    st.write("Log your exact weights and reps here. You can add or delete rows as you go.")
+    
+    import pandas as pd
+    if "tracker_data" not in st.session_state:
+        rows = []
+        for item in todays_workout["strength"]:
+            # Default to 3 sets per exercise to make logging fast
+            for s in range(1, 4):
+                rows.append({"Done": False, "Exercise": item[:30], "Set": s, "Weight (lbs)": 0, "Reps": 0})
+        if not rows:
+            rows = [{"Done": False, "Exercise": "Custom", "Set": 1, "Weight (lbs)": 0, "Reps": 0}]
+        st.session_state.tracker_data = pd.DataFrame(rows)
+
+    edited_df = st.data_editor(st.session_state.tracker_data, num_rows="dynamic", use_container_width=True)
+    st.session_state.tracker_data = edited_df
 
     st.subheader("3. Cardio Protocol")
     st.info(todays_workout["cardio"])
@@ -63,7 +80,10 @@ with tab1:
         
         submitted = st.form_submit_button("Complete Workout")
         if submitted:
-            save_log(rpe, pf_tightness, kidney_pain, notes, json.dumps(todays_workout))
+            # Combine text notes with the structured table data
+            final_notes = f"{notes}\n\nLogged Tracker Data:\n{st.session_state.tracker_data.to_string()}"
+            save_log(rpe, pf_tightness, kidney_pain, final_notes, json.dumps(todays_workout))
+            st.success("Workout logged successfully! See you tomorrow.")
 
 with tab2:
     st.header("Chat with your AI Coach")
