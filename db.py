@@ -1,0 +1,58 @@
+import sqlite3
+import json
+import os
+
+DB_PATH = os.getenv("DB_PATH", "workout_tracker.db")
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    # 1. User Profile & Active Goals (Triathlon, Snowboard, etc.)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS user_profile (
+            id INTEGER PRIMARY KEY,
+            active_goals JSON,  -- e.g., ["snowboarding", "triathlon", "core_rehab"]
+            fitness_level TEXT
+        )
+    ''')
+    
+    # Insert default profile if it doesn't exist
+    c.execute('SELECT count(*) FROM user_profile')
+    if c.fetchone()[0] == 0:
+        default_goals = json.dumps(["snowboarding", "triathlon", "posture_restoration"])
+        c.execute('INSERT INTO user_profile (id, active_goals, fitness_level) VALUES (1, ?, ?)', (default_goals, "intermediate"))
+    
+    # 2. Master Exercise Library (Tagged by goal and constraint)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS exercise_library (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            primary_muscle TEXT,
+            goal_tags JSON,       -- e.g., ["snowboarding", "skiing"]
+            constraint_tags JSON, -- e.g., ["no_axial_load", "safe_for_kidney"]
+            impact_level TEXT     -- "high" (running), "low" (swimming/cycling)
+        )
+    ''')
+    
+    # 3. Daily Logs & Symptom Tracking (Auto-Regulation)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS daily_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT,
+            workout_type TEXT,
+            completed BOOLEAN,
+            rpe INTEGER,
+            pelvic_floor_tightness INTEGER, -- 1-10 scale
+            kidney_flank_pain INTEGER,      -- 1-10 scale
+            notes TEXT,
+            executed_workout JSON
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+if __name__ == "__main__":
+    init_db()
+    print("Database expanded to support Triathlons, Snowboarding, and Symptom tracking.")
