@@ -2,13 +2,14 @@ import streamlit as st
 import json
 import sqlite3
 from engine import WorkoutEngine
+from db import DB_PATH
 
 st.set_page_config(page_title="AI Rehab & Training", layout="centered")
 
 engine = WorkoutEngine()
 
 def get_last_log():
-    conn = sqlite3.connect("workout_tracker.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT pelvic_floor_tightness, kidney_flank_pain FROM daily_logs ORDER BY id DESC LIMIT 1")
     row = c.fetchone()
@@ -18,7 +19,7 @@ def get_last_log():
     return {"pelvic_floor_tightness": 1, "kidney_flank_pain": 1}
 
 def save_log(rpe, pf, kidney, notes, workout_json):
-    conn = sqlite3.connect("workout_tracker.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
         INSERT INTO daily_logs (date, completed, rpe, pelvic_floor_tightness, kidney_flank_pain, notes, executed_workout)
