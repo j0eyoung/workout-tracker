@@ -1,12 +1,19 @@
 # Changelog
 
-## 0.1.6 - Prebuilt Image (Fast Installs)
+## 0.1.7 - Prebuilt Image, Claude Token & Garmin Fix
+
+(0.1.6 was never released: its build hung and was replaced by this version.)
+
+### 🌟 Features
+* **Claude token setting:** new "Claude token" field in the add-on Configuration tab. Run `claude setup-token` in Claude Terminal and paste the token there so the AI Coach uses your Max subscription. The token stays on your Home Assistant, never on GitHub.
 
 ### 🔧 Fixes
 * **Installs no longer build on the HA Green:** GitHub now builds the add-on image and Home Assistant just downloads it. Installs and updates take a minute or two instead of 40+ minutes.
-* **Fixed the 0.1.5 install failure:** the image is back on Python 3.11, where every Python package installs from a prebuilt wheel. 0.1.5 ran on Python 3.13 and tried to compile `pydantic-core` and `numpy` from source.
+* **Fixed the 0.1.5 install failure:** 0.1.5 ran on Python 3.13 and tried to compile `pydantic-core` and `numpy` from source. The image now uses Python 3.12, where every package installs from a prebuilt wheel.
+* **Fixed the endless dependency loop:** `garminconnect` 0.2.14 pulled in `withings-sync`, whose newer versions require a newer `garminconnect`, so pip searched old versions forever. Now on `garminconnect` 0.3.17, the same version that created your Garmin token.
+* **Garmin sync reads your token again:** sync now loads `/config/garmin_tokens.json` in the 0.3.x token format and saves refreshed tokens back to it.
 * **Fixed the app crashing on open:** the web UI and API now use the database in `/config/workout_tracker.db` (the one created at startup) instead of an empty file inside the container.
-* Smaller image: compilers are removed after the native modules are built.
+* Removed the unused `endurance-coach` CLI, which forced a slow C++ compile of `better-sqlite3`.
 
 ## 0.1.0 - Initial Release (The Megazord AI Coach)
 

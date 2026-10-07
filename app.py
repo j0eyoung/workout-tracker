@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import os
 import sqlite3
 from engine import WorkoutEngine
 from db import DB_PATH
@@ -89,7 +90,10 @@ with tab1:
 with tab2:
     st.header("Chat with your AI Coach")
     st.write("Tell the coach how you're feeling, upload a video of your form, and the AI will analyze it and update your plan.")
-    
+
+    if not os.getenv("CLAUDE_CODE_OAUTH_TOKEN"):
+        st.warning("No Claude token set. Run `claude setup-token` in Claude Terminal, paste the token into this add-on's Configuration tab, then restart the add-on.")
+
     if "messages" not in st.session_state:
         st.session_state.messages = [{"role": "assistant", "content": "Hey Joe, how did the left flank feel during those wall sits today?"}]
 

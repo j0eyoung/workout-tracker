@@ -1,6 +1,6 @@
 name: "AI Workout Tracker"
 description: "Dynamic auto-regulating workout planner and tracker."
-version: "0.1.6"
+version: "0.1.7"
 slug: "ai_workout"
 image: "ghcr.io/j0eyoung/{arch}-ai-workout"
 arch:
@@ -9,6 +9,10 @@ arch:
 init: false
 map:
   - config:rw
+options:
+  claude_code_oauth_token: ""
+schema:
+  claude_code_oauth_token: password?
 ports:
   8501/tcp: 8501
   8000/tcp: 8000

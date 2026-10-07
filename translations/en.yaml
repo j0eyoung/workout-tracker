@@ -1,0 +1,6 @@
+configuration:
+  claude_code_oauth_token:
+    name: Claude token
+    description: >-
+      Lets the AI Coach use your Claude Max subscription (no API fees). Run
+      `claude setup-token` in the Claude Terminal add-on and paste the token here.

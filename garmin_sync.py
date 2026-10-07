@@ -7,18 +7,14 @@ import os
 def sync_garmin():
     """Connects to Garmin Connect using the saved OAuth token and saves today's stats."""
     try:
-        import garth
-        
         # In the HA Add-on, the /config folder is mapped, so we look there first.
         # Fallback to local directory for testing.
         token_path = "/config/garmin_tokens.json" if os.path.exists("/config/garmin_tokens.json") else "garmin_tokens.json"
-        
-        # Load the OAuth session token
-        garth.client.load(token_path)
-        
-        # Initialize Garmin client using the loaded garth session
+
+        # Log in with the saved token file (made by setup_garmin.py). Refreshed
+        # tokens are written back to the same file.
         client = Garmin()
-        client.login()
+        client.login(token_path)
 
         today = datetime.date.today()
         
