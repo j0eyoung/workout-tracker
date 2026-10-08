@@ -53,6 +53,21 @@ def init_db():
     conn.commit()
     conn.close()
 
+def get_last_log():
+    """Latest logged session: effort, symptoms and the workout that was done."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT rpe, pelvic_floor_tightness, kidney_flank_pain, executed_workout FROM daily_logs ORDER BY id DESC LIMIT 1")
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return {"rpe": 5, "pelvic_floor_tightness": 1, "kidney_flank_pain": 1, "executed_workout": {}}
+    try:
+        executed_workout = json.loads(row[3] or "{}")
+    except ValueError:
+        executed_workout = {}
+    return {"rpe": row[0], "pelvic_floor_tightness": row[1], "kidney_flank_pain": row[2], "executed_workout": executed_workout}
+
 if __name__ == "__main__":
     init_db()
     print("Database expanded to support Triathlons, Snowboarding, and Symptom tracking.")

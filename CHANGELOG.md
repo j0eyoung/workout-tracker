@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.9 - Cardio Minutes, Exercise Guides & Coach Errors
+
+### 🌟 Features
+* **Cardio now says how long:** every cardio session shows its minutes (recovery 15, swim 20, run 20, incline walk 20, bike 30), at an easy Zone 2 pace.
+* **Cardio auto-adjusts from your logs:** adds 5 min (max once a week, up to 45) when your last session felt easy (effort 6 or less) and flank pain stayed at 3 or below. Cuts back by about a quarter when your last effort was 8+. A "Why this length" line explains each change.
+* **Exercise guides:** every exercise shows its dose (sets, reps or time) and step-by-step form cues from your routine. Tap an exercise to open it.
+* **Demo photos:** Dead Bug, Lateral Band Walk, Butterfly, Child's Pose, bike, treadmill run and walk show start/finish photos that flip like a GIF (public-domain Free Exercise DB).
+* **Set tracker** creates one row per prescribed set instead of always 3.
+
+### 🔧 Fixes
+* **AI Coach errors now show the real message** (Claude's CLI prints errors to stdout, which the app used to drop). Errors also appear in the add-on's Log tab.
+* **Claude token:** spaces and line breaks picked up when copying the token from a terminal are removed automatically.
+
 ## 0.1.8 - Open Web UI & Sidebar
 
 ### 🌟 Features

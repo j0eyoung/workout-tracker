@@ -1,19 +1,38 @@
+import datetime
 import json
+
+# Starting minutes for each cardio type, all at an easy pace (Zone 2)
+CARDIO_BASE_MINUTES = {"recovery": 15, "swim": 20, "bike": 30, "run": 20, "walk": 20}
+CARDIO_MAX_MINUTES = 45
+# Add at most 5 minutes per week
+PROGRESSION_DAYS = 7
+
+CARDIO_TEXT = {
+    "recovery": "Recovery: light walking or easy swimming (no running or biking)",
+    "swim": "Triathlon Prep: Swimming. Easy laps, or 10 x 50 m with 30 s rest. Symmetrical breathing, avoid aggressive torso rotation",
+    "bike": "Triathlon Prep: Cycling at low resistance and high cadence (85-95 rpm). Or swap for a backwards incline walk of the same length",
+    "run": "Triathlon Prep: Running in Zone 2, high cadence to minimize ground reaction force. If your heart rate drifts above Zone 2, alternate 2 min running / 1 min walking",
+    "walk": "Treadmill incline walk",
+}
+
 
 class WorkoutEngine:
     def __init__(self, db_path="workout_tracker.db"):
         self.db_path = db_path
 
-    def generate_next_workout(self, last_log):
+    def generate_next_workout(self, last_log, today=None):
         """
-        Dynamically builds the next workout based on active goals 
+        Dynamically builds the next workout based on active goals
         (Triathlon, Snowboard) and current medical symptoms.
         """
         # In a real app, these are fetched from the SQLite DB
         active_goals = ["snowboarding", "triathlon"]
-        pf_tightness = last_log.get("pelvic_floor_tightness", 1)
-        kidney_pain = last_log.get("kidney_flank_pain", 1)
-        
+        pf_tightness = last_log.get("pelvic_floor_tightness") or 1
+        kidney_pain = last_log.get("kidney_flank_pain") or 1
+        rpe = last_log.get("rpe") or 5
+        last_workout = last_log.get("executed_workout") or {}
+        today = today or datetime.date.today()
+
         workout_plan = {
             "warmup": ["Gut-Motility Primer", "360-Degree Rib Breathing", "TVA Adductor Hack"],
             "strength": [],
@@ -25,7 +44,7 @@ class WorkoutEngine:
             # Flank is acting up: Force a recovery day, no twisting, lots of breathing
             workout_plan["strength"].append("Supported Butterfly Pose (3 mins)")
             workout_plan["strength"].append("Child's Pose (Focus on left rib expansion)")
-            workout_plan["cardio"] = "Light walking or Zero-gravity Swimming (No running/biking)"
+            self._set_cardio(workout_plan, "recovery", rpe, kidney_pain, last_workout, today)
             return workout_plan
 
         # --- STRENGTH PROGRAMMING ---
@@ -42,28 +61,60 @@ class WorkoutEngine:
             if pf_tightness >= 7:
                 # High impact (running) or seated pressure (biking) will flare the pelvic floor.
                 # Force Swimming: Zero gravity, massive cardio, relieves pelvic pressure.
-                workout_plan["cardio"] = "Triathlon Prep: Swimming (Focus on symmetrical breathing, avoid aggressive torso rotation)"
+                cardio_type = "swim"
             elif pf_tightness >= 4:
                 # Moderate tightness: Biking is okay if saddle pressure is managed, or backwards walking.
-                workout_plan["cardio"] = "Triathlon Prep: Cycling (Low resistance, high cadence) OR Backwards Incline Walk"
+                cardio_type = "bike"
             else:
                 # Pelvic floor is relaxed: Safe to train running impact
-                workout_plan["cardio"] = "Triathlon Prep: Running (Zone 2, high cadence to minimize ground reaction force)"
+                cardio_type = "run"
         else:
-            workout_plan["cardio"] = "Treadmill: 20m incline walk"
+            cardio_type = "walk"
+        self._set_cardio(workout_plan, cardio_type, rpe, kidney_pain, last_workout, today)
 
         return workout_plan
+
+    def _set_cardio(self, workout_plan, cardio_type, rpe, kidney_pain, last_workout, today):
+        minutes, progressed_on, note = self._cardio_minutes(cardio_type, rpe, kidney_pain, last_workout, today)
+        workout_plan["cardio"] = (
+            f"{minutes} min: {CARDIO_TEXT[cardio_type]}. "
+            "Easy pace (you can talk in full sentences); the first 5 min are your warm-up."
+        )
+        workout_plan["cardio_type"] = cardio_type
+        workout_plan["cardio_minutes"] = minutes
+        workout_plan["cardio_progressed_on"] = progressed_on
+        workout_plan["cardio_note"] = note
+
+    def _cardio_minutes(self, cardio_type, rpe, kidney_pain, last_workout, today):
+        """Returns (minutes, date the minutes last changed, why) based on the last logged session."""
+        base = CARDIO_BASE_MINUTES[cardio_type]
+        if cardio_type == "recovery":
+            return base, None, "Recovery day: keep it short and easy."
+        if last_workout.get("cardio_type") != cardio_type or not last_workout.get("cardio_minutes"):
+            return base, today.isoformat(), "Starting length for this type of cardio."
+
+        prev = last_workout["cardio_minutes"]
+        progressed_on = last_workout.get("cardio_progressed_on") or today.isoformat()
+        if rpe >= 8:
+            minutes = max(10, round(prev * 0.75 / 5) * 5)
+            return minutes, today.isoformat(), f"Cut back from {prev} min: your last effort was {rpe}/10."
+
+        days_since_change = (today - datetime.date.fromisoformat(progressed_on)).days
+        if rpe <= 6 and kidney_pain <= 3 and days_since_change >= PROGRESSION_DAYS and prev < CARDIO_MAX_MINUTES:
+            minutes = min(prev + 5, CARDIO_MAX_MINUTES)
+            return minutes, today.isoformat(), f"Up 5 min from {prev}: last session felt easy ({rpe}/10) and symptoms stayed low."
+        return prev, progressed_on, f"Same as last time ({prev} min)."
 
 # Example execution
 if __name__ == "__main__":
     engine = WorkoutEngine()
-    
+
     # Simulate user logging a tight pelvic floor after a hard week
     recent_log = {
-        "pelvic_floor_tightness": 8, 
+        "pelvic_floor_tightness": 8,
         "kidney_flank_pain": 2
     }
-    
+
     todays_workout = engine.generate_next_workout(recent_log)
     print("DYNAMIC WORKOUT GENERATED:")
     print(json.dumps(todays_workout, indent=2))
