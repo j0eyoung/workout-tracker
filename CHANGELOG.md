@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 - Fast Phone-First App
+
+### 🌟 Features
+* **New, much faster app.** Streamlit is gone: the screens are a lightweight web page served by the add-on's own server. Taps (ticking warm-ups, marking sets done, adding sets) respond instantly on your phone; the server is only called to load and save.
+* **Built for the phone:** bottom tab bar (Today, History, Coach, Library), big tap targets, a number keypad for weight and reps, and light or dark to match your phone.
+* **Set logging per exercise:** each exercise card has its own sets with a done button, lbs and reps. "+ Add set" copies your last set, and "+ Add another exercise" logs something extra.
+* **Auto-save** shows "Saved ✓" at the top. It saves right away when you lock the phone, and the finish sliders and notes are remembered on that phone until you complete the workout.
+* **History:** tap a workout to see its exercises, cardio and every set, with a progress chart per exercise (heaviest lbs and total reps).
+* **Coach** remembers the last few messages of the conversation, so follow-up questions work.
+* **Library:** instant search with focus chips (legs, upper back, core, mobility, balance), muscle and equipment filters, and "Show more".
+
+### 🔧 Changes
+* One server on port 8501 for the app and Claude Terminal (`/workout/today`, `/workout/log`); port 8000 is no longer used.
+* Smaller image and faster startup: Streamlit, pandas and pyarrow are no longer installed.
+* The daily plan and cardio progression use your Home Assistant time zone's date.
+
 ## 0.2.1 - Workout History, API Ninjas & Your Home Gym
 
 ### 🌟 Features

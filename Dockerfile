@@ -21,7 +21,7 @@ COPY . .
 
 RUN chmod +x run.sh
 
-# Streamlit port and FastAPI port
-EXPOSE 8501 8000
+# Web UI and API
+EXPOSE 8501
 
 CMD ["./run.sh"]

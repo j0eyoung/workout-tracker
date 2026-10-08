@@ -19,11 +19,6 @@ python3 db.py
 # Collect API Ninjas exercises in the background (does nothing without a key)
 python3 ninjas_sync.py &
 
-# Start the FastAPI background service for Claude Terminal
-uvicorn api:app --host 0.0.0.0 --port 8000 &
-
-# Start the Streamlit UI
-# CORS/XSRF off: Home Assistant ingress proxies the page from its own origin
-streamlit run app.py --server.port 8501 --server.address 0.0.0.0 \
-    --server.headless true --server.enableCORS false --server.enableXsrfProtection false \
-    --browser.gatherUsageStats false
+# Web UI and its API (Home Assistant ingress and direct on port 8501). Claude Terminal uses
+# the same server for /workout/today and /workout/log.
+exec uvicorn api:app --host 0.0.0.0 --port 8501
