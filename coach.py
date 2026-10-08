@@ -235,7 +235,7 @@ def _run(prompt, timeout=300):
         return None, str(e)
 
 
-def ask(message, recent=()):
+def ask(message, recent=(), plan_context="", season=""):
     """One coach reply. `recent` is the last few chat turns, for continuity."""
     conversation = "\n".join(f"{'Joe' if m.get('role') == 'user' else 'Coach'}: {m.get('content', '')}"
                              for m in list(recent)[-6:])
@@ -244,6 +244,10 @@ def ask(message, recent=()):
     prompt += "\n\nEquipment available at home: " + ", ".join(library.selected_equipment()) + ".\n" + \
         library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)
     prompt += "\n\n" + training_data()
+    if season:
+        prompt += f"\n\nSki or snowboard season starts: {season}. Plan the build-up to it."
+    if plan_context:
+        prompt += "\n\n" + plan_context
     if conversation:
         prompt += f"\n\nConversation so far:\n{conversation}"
     prompt += f"\n\nUser Update: {message}"

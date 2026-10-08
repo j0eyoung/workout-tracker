@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6 - Sports and a Coach That Can Change Your Plan
+
+### 🌟 Features
+* **Sports in Settings:** tick Skiing, Snowboarding and Triathlon, and optionally set when the snow season starts. Daily extras lean toward ski and snowboard legs and add a balance slot (single-leg, ankle and hip control). Triathlon controls whether the swim, bike and run cardio is used.
+* **The coach can change today's plan.** Ask it, for example, for more ski-useful work or a shorter cardio day. It suggests changes (add or remove an exercise, change cardio minutes), and nothing happens until you tap **Apply**. "Undo coach changes" on the Today tab brings the original plan back.
+* **Safety still wins:** every suggestion is checked by the app. Exercises that are filtered out for your kidney or pelvic floor, that need equipment you don't have, or that aren't in the library are skipped, and the coach is told why. On a recovery day the plan stays a recovery day (only gentle mobility can be added), and cardio can't jump by more than 10 minutes.
 ## 0.3.5 - Natural Voices for Meditation
 
 ### 🌟 Features

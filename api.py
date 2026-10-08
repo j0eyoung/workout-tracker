@@ -22,13 +22,14 @@ import media
 import meditation
 import mindbody
 import ninjas_sync
+import planedit
 import tts
 from db import DB_PATH, get_last_log
 from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.3.5"
+VERSION = "0.3.6"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -76,10 +77,20 @@ def how_to(name, why=None):
             "steps": [], "tips": [], "safe": True, "warning": None}
 
 
+SPORT_OPTIONS = [("skiing", "Skiing"), ("snowboarding", "Snowboarding"), ("triathlon", "Triathlon")]
+
+
+def selected_sports():
+    chosen = library.load_settings().get("sports")
+    return chosen if chosen is not None else ["skiing", "snowboarding", "triathlon"]
+
+
 def todays_workout():
-    return engine.generate_next_workout(
-        get_last_log(), today=datetime.date.fromisoformat(history.local_today()),
-        library=get_library()["entries"], equipment=library.selected_equipment())
+    today = history.local_today()
+    w = engine.generate_next_workout(
+        get_last_log(), today=datetime.date.fromisoformat(today),
+        library=get_library()["entries"], equipment=library.selected_equipment(), goals=selected_sports())
+    return planedit.apply(w, planedit.overrides_for(today))
 
 
 # --- Draft rows: the page uses {exercise, set, weight, reps, done}; 0.2.x drafts used table headers ---
@@ -112,6 +123,7 @@ def plan():
     last = get_last_log()
     kidney, pf = last.get("kidney_flank_pain"), last.get("pelvic_floor_tightness")
     return {
+        "coach_changes": len(planedit.overrides_for(today)),
         "cooldown": {"note": mindbody.cooldown_note(kidney, pf), "cards": mindbody.cooldown(kidney, pf)},
         "date": today,
         "warmup": [how_to(n) for n in w["warmup"]],
@@ -195,8 +207,40 @@ class CoachMessage(BaseModel):
 
 @app.post("/api/coach")
 def ask_coach(m: CoachMessage):
-    reply, error = coach.ask(m.message, m.recent)
-    return {"reply": reply, "error": error}
+    plan = todays_workout()
+    lib = get_library()
+    context = planedit.INSTRUCTIONS + "\n\n" + planedit.context(plan, lib["entries"], library.selected_equipment(), selected_sports())
+    reply, error = coach.ask(m.message, m.recent, plan_context=context,
+                             season=library.load_settings().get("season_start", ""))
+    reply, data = planedit.extract(reply)
+    changes, rejected = planedit.validate(data, plan, lib["by_name"], library.selected_equipment())
+    return {"reply": reply, "error": error, "rejected": rejected,
+            "changes": [dict(c, label=planedit.label(c)) for c in changes]}
+
+
+class PlanChanges(BaseModel):
+    changes: list[dict]
+
+
+@app.post("/api/plan/changes")
+def apply_changes(p: PlanChanges):
+    """Joe approved the coach's changes. Checked again here, so only valid ones are ever saved."""
+    lib = get_library()
+    base = engine.generate_next_workout(
+        get_last_log(), today=datetime.date.fromisoformat(history.local_today()),
+        library=lib["entries"], equipment=library.selected_equipment(), goals=selected_sports())
+    today = history.local_today()
+    plan = planedit.apply(base, planedit.overrides_for(today))
+    allowed, rejected = planedit.validate({"changes": p.changes}, plan, lib["by_name"], library.selected_equipment())
+    if allowed:
+        planedit.save(today, allowed)
+    return {"ok": True, "applied": len(allowed), "rejected": rejected}
+
+
+@app.post("/api/plan/reset")
+def reset_changes():
+    planedit.clear(history.local_today())
+    return {"ok": True}
 
 
 @app.get("/api/media/yoga/{name}")
@@ -274,6 +318,8 @@ def audio_file(key: str):
 def get_settings():
     return {"equipment": library.selected_equipment(), "equipment_options": library.EQUIPMENT_OPTIONS,
             "media_base_url": library.load_settings().get("media_base_url", ""), "media_private": media.configured(),
+            "sports": selected_sports(), "sport_options": [{"id": i, "label": l} for i, l in SPORT_OPTIONS],
+            "season_start": library.load_settings().get("season_start", ""),
             "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)}
 
 
@@ -282,6 +328,8 @@ class Settings(BaseModel):
     gear_notes: str | None = None
     media_base_url: str | None = None
     voice: str | None = None
+    sports: list[str] | None = None
+    season_start: str | None = None
 
 
 @app.put("/api/settings")
@@ -292,6 +340,13 @@ def put_settings(s: Settings):
         patch["equipment"] = sorted({e for e in s.equipment if e in library.EQUIPMENT_OPTIONS} | {"bodyweight"})
     if s.gear_notes is not None:
         patch["gear_notes"] = s.gear_notes.strip()[:2000]
+    if s.sports is not None:
+        patch["sports"] = [x for x, _ in SPORT_OPTIONS if x in s.sports]
+    if s.season_start is not None:
+        try:
+            patch["season_start"] = datetime.date.fromisoformat(s.season_start).isoformat() if s.season_start else ""
+        except ValueError:
+            raise HTTPException(400, "The season date must look like 2026-12-01")
     if s.voice is not None and s.voice in tts.VOICES:
         patch["voice"] = s.voice
     if s.media_base_url is not None:

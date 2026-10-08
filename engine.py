@@ -27,12 +27,26 @@ RECOVERY_SLOTS = [("mobility", "Recovery-day stretch"), ("mobility", "Recovery-d
 RECOVERY_MUSCLES = {"glutes", "hamstrings", "adductors", "abductors", "hip flexors", "quads", "lower back"}
 
 
-def pick_accessories(library, equipment, today, recovery, exclude):
+SNOW_SPORTS = {"skiing", "snowboarding"}
+
+
+def accessory_slots(goals):
+    """Daily extras. Snow sports bias the legs slot and add a balance slot (edge, ankle and single-leg control)."""
+    snow = SNOW_SPORTS & set(goals)
+    if not snow:
+        return [s for s in ACCESSORY_SLOTS if s[0] != "legs"] + [("legs", "Leg strength and endurance")]
+    name = {"skiing"}.issuperset(snow) and "Ski" or ({"snowboarding"}.issuperset(snow) and "Snowboard" or "Ski and snowboard")
+    slots = [("legs", f"{name} legs: quad endurance and control")] + [s for s in ACCESSORY_SLOTS if s[0] != "legs"]
+    slots.insert(1, ("balance", f"{name} balance: single-leg, ankle and hip control"))
+    return slots
+
+
+def pick_accessories(library, equipment, today, recovery, exclude, goals=("snowboarding", "triathlon")):
     """Safe library exercises for today's open slots. Same picks all day, new picks tomorrow."""
     rng = random.Random(today.isoformat())
     pool = [e for e in library if e["safe"] and e["equipment"] in equipment and e["name"] not in exclude]
     picks = []
-    for goal, why in (RECOVERY_SLOTS if recovery else ACCESSORY_SLOTS):
+    for goal, why in (RECOVERY_SLOTS if recovery else accessory_slots(goals)):
         taken = {p["name"] for p in picks}
         options = [e for e in pool if goal in e["goal_tags"] and e["name"] not in taken]
         if recovery:
@@ -53,13 +67,13 @@ class WorkoutEngine:
     def __init__(self, db_path="workout_tracker.db"):
         self.db_path = db_path
 
-    def generate_next_workout(self, last_log, today=None, library=None, equipment=None):
+    def generate_next_workout(self, last_log, today=None, library=None, equipment=None, goals=None):
         """
         Dynamically builds the next workout based on active goals
-        (Triathlon, Snowboard) and current medical symptoms.
+        (skiing, snowboarding, triathlon) and current medical symptoms.
         """
-        # In a real app, these are fetched from the SQLite DB
-        active_goals = ["snowboarding", "triathlon"]
+        active_goals = list(goals) if goals is not None else ["snowboarding", "triathlon"]
+        self.goals = active_goals
         pf_tightness = last_log.get("pelvic_floor_tightness") or 1
         kidney_pain = last_log.get("kidney_flank_pain") or 1
         rpe = last_log.get("rpe") or 5
@@ -113,7 +127,8 @@ class WorkoutEngine:
     def _add_accessories(self, workout_plan, library, equipment, today, recovery):
         if not library:
             return
-        picks = pick_accessories(library, set(equipment or []), today, recovery, set(workout_plan["strength"]))
+        picks = pick_accessories(library, set(equipment or []), today, recovery, set(workout_plan["strength"]),
+                                 getattr(self, "goals", ("snowboarding", "triathlon")))
         workout_plan["strength"].extend(p["name"] for p in picks)
         workout_plan["accessories"] = picks
 

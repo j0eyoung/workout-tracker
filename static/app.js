@@ -221,6 +221,7 @@ function renderToday() {
   const cardio = p.cardio;
   const cardioText = (cardio.text || "").replace(/^\d+ min:\s*/, "");
   $view.innerHTML = `
+    ${p.coach_changes ? `<div class="small muted">Your coach changed today's plan. <button type="button" class="btn link small" data-act="reset-plan">Undo coach changes</button></div>` : ""}
     <h2>1. Daily non-negotiables</h2>
     ${p.warmup.map(warmupCard).join("")}
 
@@ -400,6 +401,20 @@ async function loadClaude() {
 }
 let claudePoll;
 
+// The coach can suggest changes to today's plan; nothing changes until you tap Apply.
+function changesBlock(m, i) {
+  let html = "";
+  if (m.changes?.length && !m.dismissed) {
+    html += `<div class="changes"><strong>Suggested changes to today's plan</strong>
+      <ul>${m.changes.map((c) => `<li>${esc(c.label)}${c.why ? ` <span class="muted">(${esc(c.why)})</span>` : ""}</li>`).join("")}</ul>
+      ${m.applied !== undefined ? `<div class="small muted">${m.applied ? "Applied to today's plan." : "Nothing was changed."}</div>`
+        : `<div class="row-actions"><button type="button" class="btn small" data-act="apply-changes" data-i="${i}">Apply</button>
+           <button type="button" class="btn small" data-act="dismiss-changes" data-i="${i}">No thanks</button></div>`}</div>`;
+  }
+  if (m.rejected?.length) html += `<div class="small muted" style="margin-top:6px">Skipped for safety: ${esc(m.rejected.join(" "))}</div>`;
+  return html;
+}
+
 function renderCoach() {
   if (!state.claude) loadClaude();
   const signedOut = state.claude && !state.claude.signed_in;
@@ -407,7 +422,7 @@ function renderCoach() {
     ${signedOut ? `<div class="card warning"><p style="margin:0 0 8px">The coach isn't connected to your Claude account yet.</p>
       <button type="button" class="btn primary" data-act="goto-settings">Connect in Settings</button></div>` : ""}
     <div class="chat">
-      ${state.coach.map((m) => `<div class="msg ${m.role}${m.error ? " error" : ""}">${esc(m.content)}</div>`).join("")}
+      ${state.coach.map((m, i) => `<div class="msg ${m.role}${m.error ? " error" : ""}">${esc(m.content)}${changesBlock(m, i)}</div>`).join("")}
       ${state.coachBusy ? `<div class="msg assistant muted">Coach is thinking…</div>` : ""}
     </div>
     <div class="composer">
@@ -429,7 +444,7 @@ async function sendCoach() {
     const res = await api("api/coach", { method: "POST", body: JSON.stringify({ message, recent }) });
     state.coach.push(res.error
       ? { role: "assistant", content: `Coach hit an error: ${res.error}`, error: true }
-      : { role: "assistant", content: res.reply || "(no reply)" });
+      : { role: "assistant", content: res.reply || "(no reply)", changes: res.changes || [], rejected: res.rejected || [] });
   } catch {
     state.coach.push({ role: "assistant", content: "Couldn't reach the coach. Check your connection.", error: true });
   }
@@ -448,7 +463,17 @@ async function renderSettings() {
   const s = state.settings;
   const mine = new Set(s.equipment);
   const c = state.claude;
+  const sports = new Set(s.sports);
   $view.innerHTML = `
+    <h2>Sports</h2>
+    <div class="card">
+      <p class="sub" style="margin:0 0 10px">What you're training for. Your daily extras and the coach follow this. Everything still goes through your kidney and pelvic-floor safety filter.</p>
+      <div class="chips wrap">${s.sport_options.map((o) =>
+        `<button type="button" class="chip${sports.has(o.id) ? " on" : ""}" data-act="sport" data-v="${esc(o.id)}" aria-pressed="${sports.has(o.id)}">${esc(o.label)}</button>`).join("")}</div>
+      <label class="sub" for="season" style="display:block;margin-top:12px">Snow season starts (optional)</label>
+      <input type="date" id="season" class="code-input" style="width:100%" value="${esc(s.season_start)}">
+      <div class="row-actions"><button type="button" class="btn small" data-act="save-season">Save date</button></div>
+    </div>
     <h2>Equipment</h2>
     <div class="card">
       <p class="sub" style="margin:0 0 10px">Daily plans only use what's ticked. Barbell moves stay out of your plans for your kidney either way.</p>
@@ -784,6 +809,52 @@ const actions = {
       state.mind = null;
       toast("Saved");
     } catch { toast("That address must start with https://"); }
+  },
+  async sport(el) {
+    const s = state.settings;
+    const next = new Set(s.sports);
+    next.has(el.dataset.v) ? next.delete(el.dataset.v) : next.add(el.dataset.v);
+    s.sports = [...next];
+    el.classList.toggle("on", next.has(el.dataset.v));
+    try {
+      state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ sports: s.sports }) });
+      if (saveTimer) await saveDraft();
+      refreshPlan().catch(() => {});
+      toast("Saved");
+    } catch { toast("Couldn't save"); }
+    renderSettings();
+  },
+  async "save-season"() {
+    try {
+      state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ season_start: document.getElementById("season").value }) });
+      toast("Saved");
+    } catch { toast("Couldn't save that date"); }
+  },
+  async "apply-changes"(el) {
+    const m = state.coach[Number(el.dataset.i)];
+    if (!m || !m.changes) return;
+    el.disabled = true;
+    try {
+      const r = await api("api/plan/changes", { method: "POST", body: JSON.stringify({ changes: m.changes }) });
+      m.applied = r.applied;
+      if (saveTimer) await saveDraft();
+      await refreshPlan();
+      toast(r.applied ? "Today's plan updated" : "Nothing was changed");
+    } catch { toast("Couldn't update the plan"); el.disabled = false; return; }
+    store.set("coach", state.coach.slice(-50));
+    renderCoach();
+  },
+  "dismiss-changes"(el) {
+    const m = state.coach[Number(el.dataset.i)];
+    if (m) m.dismissed = true;
+    store.set("coach", state.coach.slice(-50));
+    renderCoach();
+  },
+  async "reset-plan"() {
+    if (!confirm("Remove all of today's coach changes?")) return;
+    await api("api/plan/reset", { method: "POST" });
+    await refreshPlan();
+    toast("Back to the original plan");
   },
   async "save-gear"() {
     try {
