@@ -1,12 +1,17 @@
 name: "AI Workout Tracker"
 description: "Dynamic auto-regulating workout planner and tracker."
-version: "0.1.7"
+version: "0.1.8"
 slug: "ai_workout"
 image: "ghcr.io/j0eyoung/{arch}-ai-workout"
 arch:
   - aarch64
   - amd64
 init: false
+# Serve the Streamlit UI through Home Assistant (Open Web UI + sidebar panel)
+ingress: true
+ingress_port: 8501
+panel_icon: mdi:dumbbell
+panel_title: "Workouts"
 map:
   - config:rw
 options:

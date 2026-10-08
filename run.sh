@@ -19,4 +19,7 @@ python3 db.py
 uvicorn api:app --host 0.0.0.0 --port 8000 &
 
 # Start the Streamlit UI
-streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+# CORS/XSRF off: Home Assistant ingress proxies the page from its own origin
+streamlit run app.py --server.port 8501 --server.address 0.0.0.0 \
+    --server.headless true --server.enableCORS false --server.enableXsrfProtection false \
+    --browser.gatherUsageStats false

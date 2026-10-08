@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8 - Open Web UI & Sidebar
+
+### 🌟 Features
+* **Open from Home Assistant:** the add-on page now has **Open Web UI**, and you can turn on **Show in sidebar** to get a "Workouts" panel. Works in the HA phone app, behind your Home Assistant login.
+* Direct access on port 8501 still works.
+
 ## 0.1.7 - Prebuilt Image, Claude Token & Garmin Fix
 
 (0.1.6 was never released: its build hung and was replaced by this version.)
