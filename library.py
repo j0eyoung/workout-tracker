@@ -52,7 +52,8 @@ EQUIPMENT_CHOICES = [
 # Barbell lifts are still filtered out by the safety rules.
 DEFAULT_EQUIPMENT = [
     "bodyweight", "bands", "dumbbell", "kettlebell", "foam roller", "bench", "pull-up bar", "cable",
-    "ez bar", "barbell", "plates", "cardio machine",
+    "ez bar", "barbell", "plates", "cardio machine", "vibration plate",
+    "inversion table",
 ]
 
 # --- Normalization -----------------------------------------------------------------------------
@@ -550,10 +551,26 @@ def build(db_path, force=False):
 
 
 EQUIPMENT_OPTIONS = [
-    "bodyweight", "bands", "dumbbell", "kettlebell", "stability ball", "foam roller", "medicine ball", "bench",
-    "pull-up bar", "cable", "machine", "barbell", "ez bar", "suspension trainer", "sliders", "rings", "clubbell",
-    "macebell", "sandbag", "landmine", "plates", "cardio machine", "other",
+    "bodyweight", "bands", "dumbbell", "kettlebell", "stability ball", "foam roller", "massage ball", "medicine ball",
+    "bench", "squat rack", "pull-up bar", "cable", "machine", "barbell", "ez bar", "suspension trainer", "sliders",
+    "rings", "clubbell", "macebell", "sandbag", "landmine", "plates", "cardio machine", "treadmill", "bike",
+    "rower", "vibration plate", "inversion table", "other",
 ]
+
+# What the coach is told about the gym (editable in Settings). Weights matter: the coach can only
+# prescribe loads you can actually build.
+DEFAULT_GEAR_NOTES = (
+    "Cardio: treadmill, Peloton bike, KingSmith water rower.\n"
+    "Strength: squat rack, adjustable bench (flat/incline/decline), Centr 1 cable machine / functional trainer "
+    "with Marsafit ergonomic grips, Rage pull-up bar.\n"
+    "Free weights: dumbbells 5-35 lb; barbell with six 25 lb bumper plates, about ten 2.5 lb plates and a 10 lb "
+    "bumper set; EZ-curl bar; 15 lb kettlebell; bands 30, 50 and 70 lb.\n"
+    "Recovery: vibration board, inversion table, Rage recovery set (foam roller, massage ball). "
+    "Joe's PT said the vibration board could help: use it for recovery, low settings, short sessions, and only on "
+    "low-symptom days (skip it when kidney pain or pelvic floor tightness is high). "
+    "The inversion table is also approved by his PT: use it for gentle spinal decompression after training, "
+    "short sessions at a shallow angle, and skip it when symptoms are high."
+)
 
 # App settings live in one JSON file next to the database so they survive updates and can grow
 # (equipment now; sports and training goals later). The Settings tab is the only thing that writes it.

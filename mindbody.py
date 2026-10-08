@@ -1,0 +1,325 @@
+"""Mind & Body: yoga poses, Baduanjin qigong and cool-down picks, as cards in the same shape as the
+exercise library (api.library_card). Written for Joe's constraints: left kidney pyeloplasty adhesions
+(no deep twists, deep backbends, compression or inversion-type loading in automatic picks) and a
+hypertonic pelvic floor (nothing that makes him grip or bear down; long slow exhales).
+General wellness guidance, not medical advice. Pictures: Yoga Posture Dataset on Kaggle by Mrinal Tyagi, CC0."""
+import library
+
+PHOTO_SOURCE = "Yoga Posture Dataset (Kaggle, CC0)"
+
+# slug -> pictures on the media server (workout/yoga/<slug>-<n>.jpg)
+PHOTOS = {
+    "adho-mukha-svanasana": 5, "adho-mukha-vrksasana": 5, "alanasana": 5, "anjaneyasana": 5, "ardha-chandrasana": 5,
+    "ardha-matsyendrasana": 5, "ardha-navasana": 3, "ardha-pincha-mayurasana": 5, "ashta-chandrasana": 2,
+    "baddha-konasana": 5, "bakasana": 5, "balasana": 5, "bitilasana": 5, "camatkarasana": 5, "dhanurasana": 5,
+    "eka-pada-rajakapotasana": 5, "garudasana": 2, "halasana": 5, "hanumanasana": 5, "malasana": 5,
+    "marjaryasana": 5, "navasana": 5, "padmasana": 5, "parsva-virabhadrasana": 4, "parsvottanasana": 5,
+    "paschimottanasana": 5, "phalakasana": 5, "pincha-mayurasana": 5, "salamba-bhujangasana": 5,
+    "salamba-sarvangasana": 5, "setu-bandha-sarvangasana": 5, "sivasana": 1, "supta-kapotasana": 3,
+    "trikonasana": 4, "upavistha-konasana": 0, "urdhva-dhanurasana": 5, "urdhva-mukha-svsnssana": 5,
+    "ustrasana": 5, "utkatasana": 5, "uttanasana": 5, "utthita-hasta-padangusthasana": 5,
+    "utthita-parsvakonasana": 5, "vasisthasana": 5, "virabhadrasana-one": 5, "virabhadrasana-three": 5,
+    "virabhadrasana-two": 5, "vrksasana": 4,
+}
+
+BREATH = "Breathe slowly through the nose; make each exhale longer than the inhale and keep your belly and pelvic floor soft."
+
+# Why a pose is left out of automatic picks (shown as the warning on its card).
+_WHY = {
+    "twist": "Deep twist: twisting compresses the kidney area, so it stays out of your automatic picks.",
+    "backbend": "Deep backbend: arching loads the flank and kidney area, so it stays out of your automatic picks.",
+    "inversion": "Inversion or heavy shoulder and neck loading: skipped in your automatic picks while the kidney adhesions are healing.",
+    "core": "Hard core or hip-flexor clamp: it makes the pelvic floor grip, so it stays out of your automatic picks.",
+    "extreme": "Extreme stretch for the hips and pelvic floor: skipped in your automatic picks.",
+}
+
+
+def P(slug, sanskrit, english, cat, level, steps, tip, *, cool=False, caution=None, unsafe=None, muscles=(), dose="30-60 sec"):
+    return {"slug": slug, "sanskrit": sanskrit, "english": english, "cat": cat, "level": level, "steps": steps,
+            "tip": tip, "cool": cool, "caution": caution, "unsafe": unsafe, "muscles": list(muscles), "dose": dose}
+
+
+YOGA = [
+    P("balasana", "Balasana", "Child's pose", "restorative", "beginner",
+      ["Kneel and sit back toward your heels, knees hip-width apart.", "Fold forward and rest your forehead on the floor or a pillow.",
+       "Arms long in front or resting by your feet.", "Breathe into your back ribs."],
+      "Put a cushion under your hips or forehead if anything feels pinched.", cool=True, muscles=["lower back", "hips"]),
+    P("sivasana", "Savasana", "Final rest", "restorative", "beginner",
+      ["Lie on your back, legs a little apart, arms by your sides palms up.", "Let your feet fall open and let your jaw and belly go soft.",
+       "Breathe normally and rest for 2-5 minutes."],
+      "A pillow under your knees takes the load off your lower back.", cool=True, dose="2-5 min", muscles=["whole body"]),
+    P("marjaryasana", "Marjaryasana", "Cat pose", "spine", "beginner",
+      ["On hands and knees, wrists under shoulders, knees under hips.", "Exhale and round your back toward the ceiling, chin toward your chest.",
+       "Keep it small and slow; this is a gentle spine wave."],
+      "Pair with cow pose and move with your breath.", cool=True, dose="8-10 slow rounds", muscles=["spine", "core"]),
+    P("bitilasana", "Bitilasana", "Cow pose", "spine", "beginner",
+      ["On hands and knees, wrists under shoulders, knees under hips.", "Inhale and let your belly drop slightly while you lift your chest and tailbone gently.",
+       "Keep the arch small and your neck long."],
+      "Stay well short of a deep arch; this is a soft movement.", cool=True, caution="Keep the arch small and gentle to protect the kidney area.",
+      dose="8-10 slow rounds", muscles=["spine"]),
+    P("uttanasana", "Uttanasana", "Standing forward fold", "forward fold", "beginner",
+      ["Stand with feet hip-width apart and bend your knees generously.", "Hinge from the hips and let your upper body hang.",
+       "Hold your elbows or rest hands on shins or a block.", "Roll up slowly, head last."],
+      "Bend your knees as much as you like; only fold as far as is comfortable.", cool=True, caution="Fold only as far as is comfortable and come up slowly.",
+      muscles=["hamstrings", "lower back"]),
+    P("paschimottanasana", "Paschimottanasana", "Seated forward fold", "forward fold", "beginner",
+      ["Sit with legs straight in front, a folded blanket under your hips.", "Sit tall, then hinge forward from the hips.",
+       "Rest your hands on your legs, wherever they reach.", "Keep your back long, not forced down."],
+      "Bend your knees or loop a strap around your feet. Go only as far as is comfortable.", cool=True,
+      caution="Fold only as far as is comfortable; never pull yourself down.", muscles=["hamstrings", "lower back"]),
+    P("baddha-konasana", "Baddha Konasana", "Bound angle pose", "hips", "beginner",
+      ["Sit with the soles of your feet together and knees falling out.", "Sit on a folded blanket so your hips are above your knees.",
+       "Hold your ankles and sit tall.", "Let your knees drop; do not push them down."],
+      "Rest your knees on cushions so your hips and pelvic floor can soften.", cool=True,
+      caution="Let your hips soften; do not push your knees down.", muscles=["inner thighs", "hips"]),
+    P("malasana", "Malasana", "Garland pose (supported squat)", "hips", "beginner",
+      ["Stand with feet wider than hips, toes turned out.", "Lower into a squat, heels down or on a rolled towel.",
+       "Press your elbows gently into your knees, palms together.", "Sit on a block if you like."],
+      "Sit on a block or hold a doorframe so you can relax your pelvic floor rather than grip.", cool=True,
+      caution="Support your hips so your pelvic floor can relax.", muscles=["hips", "glutes"]),
+    P("adho-mukha-svanasana", "Adho Mukha Svanasana", "Downward-facing dog", "strength", "beginner",
+      ["Start on hands and knees, tuck your toes and lift your hips up and back.", "Keep your knees soft and your back long.",
+       "Press your hands into the floor and relax your head and neck.", "Lower with a long exhale."],
+      "Bend your knees as much as you need; the goal is a long back, not straight legs.", cool=True,
+      caution="Keep a long back and soft knees; skip it on days your head feels pressured.", muscles=["shoulders", "hamstrings", "calves"]),
+    P("phalakasana", "Phalakasana", "Plank pose", "strength", "intermediate",
+      ["From hands and knees, step your feet back into a straight line.", "Stack shoulders over wrists, keep your belly gently engaged.",
+       "Breathe steadily; do not clench your pelvic floor.", "Drop your knees to rest."],
+      "Hold on your knees or against a wall to keep it easy.", caution="Skip it on days your pelvic floor feels tight.",
+      dose="15-30 sec", muscles=["core", "shoulders"]),
+    P("salamba-bhujangasana", "Salamba Bhujangasana", "Sphinx pose", "gentle backbend", "beginner",
+      ["Lie on your belly, forearms on the floor with elbows under shoulders.", "Lift your chest softly, keeping your hips pressed down.",
+       "Keep your neck long and your lower back relaxed.", "Lower slowly."],
+      "Small lift only. Stop if your left flank feels any pinching.", caution="Keep the lift small and stop if your kidney area feels pinched.",
+      muscles=["spine", "chest"]),
+    P("vrksasana", "Vrksasana", "Tree pose", "balance", "beginner",
+      ["Stand tall and shift your weight onto one foot.", "Place the other foot on your calf or inner thigh, never on the knee.",
+       "Hands at your chest or overhead.", "Fix your eyes on a still spot; switch sides."],
+      "Keep your toes on the floor with your heel against your ankle for a lower version.", dose="20-30 sec each side",
+      muscles=["legs", "balance"]),
+    P("utkatasana", "Utkatasana", "Chair pose", "strength", "beginner",
+      ["Stand with feet hip-width apart and bend your knees as if sitting on a chair.", "Reach your arms forward or overhead.",
+       "Keep your weight in your heels and your ribs down."],
+      "Sit back only as far as is comfortable; keep it shallow.", caution="Keep it shallow; don't bear down.", dose="15-30 sec",
+      muscles=["quads", "glutes"]),
+    P("anjaneyasana", "Anjaneyasana", "Low lunge", "hips", "beginner",
+      ["From hands and knees, step one foot forward between your hands.", "Lower your back knee onto a cushion.",
+       "Slide your hips forward slightly, hands on your front thigh.", "Keep your chest tall; switch sides."],
+      "Stay low and keep the lift in your chest small; no deep arch.", cool=True, caution="Keep your chest tall and don't arch back.",
+      dose="30-45 sec each side", muscles=["hip flexors"]),
+    P("alanasana", "Alanasana", "High crescent lunge", "strength", "intermediate",
+      ["Step one foot forward into a lunge and lift your torso.", "Reach your arms overhead, ribs down.", "Keep your front knee over your ankle.",
+       "Switch sides."],
+      "Keep your hands on your hips if raising your arms feels like too much.", caution="Keep your ribs down; no deep arch.",
+      dose="20-30 sec each side", muscles=["legs", "hip flexors"]),
+    P("ashta-chandrasana", "Ashta Chandrasana", "High lunge, arms overhead", "strength", "intermediate",
+      ["Step into a lunge with your back heel lifted.", "Reach your arms up beside your ears.", "Keep your hips square and your ribs down."],
+      "Rest your hands on your front thigh for a simpler version.", caution="Keep your ribs down; no deep arch.", dose="20-30 sec each side",
+      muscles=["legs"]),
+    P("virabhadrasana-one", "Virabhadrasana I", "Warrior I", "strength", "intermediate",
+      ["Step one foot back, back foot turned out slightly.", "Bend your front knee over your ankle, hips facing forward.", "Raise your arms and lift your chest.",
+       "Switch sides."],
+      "Keep your stance short and your hips square; no arch.", caution="Keep your hips square; do not arch back or twist.",
+      dose="20-30 sec each side", muscles=["legs", "hips"]),
+    P("virabhadrasana-two", "Virabhadrasana II", "Warrior II", "strength", "beginner",
+      ["Step your feet wide, front toes forward and back foot turned in slightly.", "Bend your front knee over your ankle.",
+       "Reach your arms out to the sides at shoulder height.", "Keep your torso upright; look over the front hand."],
+      "Keep the stance short and your torso over your hips (no leaning).", caution="Keep your torso upright; no leaning into the side.",
+      dose="20-30 sec each side", muscles=["legs", "hips"]),
+    P("virabhadrasana-three", "Virabhadrasana III", "Warrior III", "balance", "intermediate",
+      ["Stand on one leg, hinge forward and lift the back leg.", "Keep your hips level and arms by your sides.", "Hold with a slight bend in the standing knee."],
+      "Practice with your hands on a chair.", caution="Keep your hips square and level; don't rotate.", dose="10-20 sec each side",
+      muscles=["hamstrings", "glutes", "balance"]),
+    P("parsvottanasana", "Parsvottanasana", "Pyramid pose", "forward fold", "intermediate",
+      ["Step one foot back, both feet facing forward, hips square.", "Hinge forward from the hips over your front leg.", "Rest your hands on blocks or your shin.", "Switch sides."],
+      "Keep your hips square and fold only as far as is comfortable.", caution="Keep your hips square and fold only as far as is comfortable.",
+      dose="20-30 sec each side", muscles=["hamstrings"]),
+    P("trikonasana", "Utthita Trikonasana", "Triangle pose", "standing", "intermediate",
+      ["Stand with feet wide, front toes forward.", "Reach long over your front leg, then rest your hand on your shin or a block.", "Keep your chest open and your top arm up.",
+       "Return slowly; switch sides."],
+      "Rest your hand high on your leg. Don't twist your chest toward the ceiling.", caution="Side-bending loads the flank: keep it short, especially on your left.",
+      dose="20-30 sec each side", muscles=["hamstrings", "sides of waist"]),
+    P("utthita-parsvakonasana", "Utthita Parsvakonasana", "Extended side angle", "standing", "intermediate",
+      ["Step wide, bend your front knee and rest your forearm on your thigh.", "Reach your top arm over your head.", "Keep your chest open without twisting."],
+      "Keep your forearm on your thigh, not the floor.", caution="Side-bending and rotation load the flank; keep it small, especially on your left.",
+      dose="20-30 sec each side", muscles=["legs", "sides of waist"]),
+    P("parsva-virabhadrasana", "Parsva Virabhadrasana", "Reverse warrior", "standing", "intermediate",
+      ["From Warrior II, flip your front palm up and reach your back arm over.", "Rest the back hand on your back leg.", "Keep your chest open."],
+      "Keep the side bend small.", caution="Side-bending loads the flank; keep it small, especially on your left.", dose="15-20 sec each side",
+      muscles=["sides of waist", "legs"]),
+    P("ardha-chandrasana", "Ardha Chandrasana", "Half moon", "balance", "intermediate",
+      ["From a lunge, rest your hand on a block and lift the back leg.", "Stack your hips and open your chest.", "Reach your top arm up."],
+      "Practice at a wall for balance.", caution="Rotating and side-bending load the flank; use a wall and keep it small.", dose="10-20 sec each side",
+      muscles=["legs", "balance"]),
+    P("utthita-hasta-padangusthasana", "Utthita Hasta Padangusthasana", "Standing hand-to-big-toe", "balance", "advanced",
+      ["Stand tall and lift one knee, holding it with your hand.", "Extend the leg forward if you can, holding your big toe or a strap.", "Keep your hips square."],
+      "Hold your knee or use a strap and stay near a wall.", caution="Keep your hips square; don't pull the leg across your body.",
+      dose="15-20 sec each side", muscles=["hamstrings", "balance"]),
+    P("garudasana", "Garudasana", "Eagle pose", "balance", "intermediate",
+      ["Bend your knees and cross one thigh over the other.", "Cross your arms with elbows stacked.", "Sink your hips slightly and lift your elbows."],
+      "Keep your toes on the floor for a lower version.", caution="The wrapped shape can twist the trunk: keep it shallow.", dose="15-20 sec each side",
+      muscles=["hips", "shoulders", "balance"]),
+    P("vasisthasana", "Vasisthasana", "Side plank", "strength", "advanced",
+      ["From plank, roll onto the outside of one foot and lift your top arm.", "Stack your hips and keep your body in a line.", "Lower your bottom knee to ease it."],
+      "Drop the bottom knee or lean on a wall.", caution="Side loading on the left flank: keep it short and on your knees.",
+      dose="10-20 sec each side", unsafe="core", muscles=["core", "shoulders"]),
+    P("setu-bandha-sarvangasana", "Setu Bandha Sarvangasana", "Bridge pose", "gentle backbend", "beginner",
+      ["Lie on your back, knees bent and feet hip-width apart.", "Press your feet down and lift your hips a few inches.", "Keep your thighs parallel, then lower slowly."],
+      "Stay low, or rest your hips on a block.", caution="Stay low (a few inches) to protect the kidney area.", dose="5 slow lifts",
+      muscles=["glutes", "hamstrings"]),
+    P("upavistha-konasana", "Upavistha Konasana", "Wide-angle seated forward fold", "hips", "intermediate",
+      ["Sit with your legs wide, toes pointing up.", "Sit on a folded blanket and hinge forward from your hips.", "Rest your hands in front of you."],
+      "Bend your knees slightly and lean on cushions.", caution="Fold only as far as is comfortable.", muscles=["inner thighs", "hamstrings"]),
+    P("padmasana", "Padmasana", "Lotus pose (easy seat)", "seated", "intermediate",
+      ["Sit tall on a cushion with your legs crossed.", "Rest your hands on your knees.", "Keep your spine long and your shoulders loose."],
+      "Use an easy cross-legged seat; full lotus isn't needed.", caution="Use an easy cross-legged seat; skip full lotus if your knees complain.",
+      dose="1-5 min", muscles=["hips"]),
+
+    # Left out of automatic picks for Joe's kidney and pelvic floor.
+    P("ardha-matsyendrasana", "Ardha Matsyendrasana", "Seated spinal twist", "twist", "intermediate",
+      ["Sit tall with your legs crossed or extended.", "Place a hand behind you and turn gently.", "Look over your shoulder."],
+      "Turn your head only, keeping hips square.", unsafe="twist", dose="20-30 sec each side", muscles=["spine"]),
+    P("dhanurasana", "Dhanurasana", "Bow pose", "backbend", "intermediate",
+      ["Lie on your belly and hold your ankles.", "Lift your chest and thighs.", "Breathe and lower."], "A deep backbend.",
+      unsafe="backbend", dose="15-20 sec", muscles=["spine"]),
+    P("urdhva-dhanurasana", "Urdhva Dhanurasana", "Wheel pose", "backbend", "advanced",
+      ["Lie on your back with hands by your ears.", "Press into hands and feet and lift into an arch."], "A deep backbend.",
+      unsafe="backbend", dose="10 sec", muscles=["spine"]),
+    P("ustrasana", "Ustrasana", "Camel pose", "backbend", "intermediate",
+      ["Kneel, hands on your hips.", "Lift your chest and arch back.", "Reach for your heels if comfortable."], "A deep backbend.",
+      unsafe="backbend", dose="15-20 sec", muscles=["spine"]),
+    P("urdhva-mukha-svsnssana", "Urdhva Mukha Svanasana", "Upward-facing dog", "backbend", "intermediate",
+      ["Lie on your belly with hands by your ribs.", "Press up with straight arms and lift your thighs.", "Lower."], "A strong backbend: use sphinx instead.",
+      unsafe="backbend", dose="10-15 sec", muscles=["spine", "chest"]),
+    P("camatkarasana", "Camatkarasana", "Wild thing", "backbend", "advanced",
+      ["From downward dog, lift one leg and arch back into a flip.", "Reach your free arm overhead."], "A deep backbend with a twist.",
+      unsafe="backbend", dose="10 sec each side", muscles=["spine", "hips"]),
+    P("eka-pada-rajakapotasana", "Eka Pada Rajakapotasana", "Pigeon pose", "hips", "intermediate",
+      ["From plank, bring one knee forward and place your shin on the floor.", "Extend your other leg behind you.", "Fold forward over your front leg."],
+      "Try a reclined figure-four stretch on your back instead.", unsafe="extreme", dose="30-60 sec each side", muscles=["hips"]),
+    P("supta-kapotasana", "Supta Kapotasana", "Sleeping pigeon", "backbend", "advanced",
+      ["From pigeon, lean back and lift your chest.", "Reach your hands toward your back foot."], "A deep backbend.", unsafe="backbend",
+      dose="10 sec each side", muscles=["spine", "hips"]),
+    P("halasana", "Halasana", "Plow pose", "inversion", "intermediate",
+      ["Lie on your back and lift your legs overhead.", "Lower your toes toward the floor behind you."], "Skip; try legs up the wall instead.",
+      unsafe="inversion", dose="20-30 sec", muscles=["spine", "hamstrings"]),
+    P("salamba-sarvangasana", "Salamba Sarvangasana", "Shoulder stand", "inversion", "intermediate",
+      ["Lie on your back and lift your legs overhead.", "Support your back with your hands.", "Lift into a vertical line."], "Skip; try legs up the wall instead.",
+      unsafe="inversion", dose="20-30 sec", muscles=["shoulders"]),
+    P("adho-mukha-vrksasana", "Adho Mukha Vrksasana", "Handstand", "inversion", "advanced",
+      ["Kick up into a handstand against a wall."], "Skip.", unsafe="inversion", dose="10 sec", muscles=["shoulders"]),
+    P("pincha-mayurasana", "Pincha Mayurasana", "Forearm stand", "inversion", "advanced",
+      ["Kick up onto your forearms against a wall."], "Skip.", unsafe="inversion", dose="10 sec", muscles=["shoulders"]),
+    P("ardha-pincha-mayurasana", "Ardha Pincha Mayurasana", "Dolphin pose", "inversion", "intermediate",
+      ["From forearms and knees, lift your hips like downward dog on forearms."], "Use downward dog on your hands instead.",
+      unsafe="inversion", dose="15-20 sec", muscles=["shoulders"]),
+    P("bakasana", "Bakasana", "Crow pose", "core", "advanced",
+      ["Squat and rest your knees on your upper arms.", "Lean forward and lift your feet."], "Skip.", unsafe="core", dose="10 sec", muscles=["core", "arms"]),
+    P("navasana", "Navasana", "Boat pose", "core", "intermediate",
+      ["Sit and lean back, lifting your feet and shins."], "Skip; try a gentle dead bug on your back instead.", unsafe="core", dose="10-20 sec", muscles=["core"]),
+    P("ardha-navasana", "Ardha Navasana", "Half boat", "core", "intermediate",
+      ["Sit and lean back slightly, lifting your feet."], "Skip.", unsafe="core", dose="10-20 sec", muscles=["core"]),
+    P("hanumanasana", "Hanumanasana", "Splits", "hips", "advanced",
+      ["From a lunge, slide your front leg forward and back leg back."], "Skip.", unsafe="extreme", dose="20 sec each side", muscles=["hamstrings", "hip flexors"]),
+]
+
+
+def media_base():
+    return (library.load_settings().get("media_base_url") or "").rstrip("/")
+
+
+def _yoga_card(p):
+    base = media_base()
+    n = PHOTOS.get(p["slug"], 0)
+    images = [f"{base}/{p['slug']}-{i}.jpg" for i in range(1, n + 1)] if base else []
+    unsafe = p["unsafe"]
+    warning = _WHY[unsafe] if unsafe else p["caution"]
+    return {
+        "name": f"{p['english']} ({p['sanskrit']})", "dose": p["dose"], "sets": 1, "why": None,
+        "images": images[:2], "gallery": images, "image_note": None,
+        "steps": p["steps"] + [BREATH], "tips": [p["tip"]], "safe": not unsafe, "warning": warning,
+        "muscles": p["muscles"], "equipment": "bodyweight", "level": p["level"],
+        "sources": ["Yoga", PHOTO_SOURCE] if images else ["Yoga"], "category": p["cat"], "cooldown": bool(p["cool"]) and not unsafe,
+    }
+
+
+# --- Baduanjin (Eight Pieces of Brocade) qigong, adapted for the kidney and pelvic floor ---------------------
+
+QIGONG = [
+    ("Baduanjin 1: Two Hands Hold Up the Heavens", [
+        "Stand with feet shoulder-width apart, knees soft, hands low in front of your belly.",
+        "Interlace your fingers, palms up, and slowly raise your hands to chest height as you inhale.",
+        "Turn your palms up and press toward the sky, lifting only as far as is comfortable.",
+        "Exhale and let your hands float down. Repeat 6-8 times."], "Lift gently; don't arch your lower back."),
+    ("Baduanjin 2: Draw the Bow to Shoot the Eagle", [
+        "Step out into a shallow stance, knees only slightly bent.",
+        "Cross your arms in front of your chest and extend one arm to the side as if drawing a bow.",
+        "Turn your head only to look over the extending hand; keep your hips and chest facing forward.",
+        "Return to center and switch sides. 4 each side."], "Kidney-safe change: only your head turns; your hips stay square."),
+    ("Baduanjin 3: Separate Heaven and Earth", [
+        "Stand with feet shoulder-width apart.",
+        "Raise one palm up overhead while the other presses down beside your hip.",
+        "Stretch long through both arms without leaning to the side.",
+        "Switch hands. 6 each side."], "Keep your ribs stacked over your hips; no side bend."),
+    ("Baduanjin 4: Wise Owl Gazes Backward", [
+        "Stand tall with arms relaxed by your sides, palms turned back.",
+        "Turn only your head slowly to look over one shoulder.",
+        "Return to center and look over the other shoulder.",
+        "Breathe slowly. 5 each side."], "Kidney-safe: turn the head only. Keep your shoulders and hips facing forward."),
+    ("Baduanjin 5: Sway the Head and Shake the Tail", [
+        "Stand with feet wide and knees slightly bent, hands resting on your thighs.",
+        "Tip your head gently side to side and let your upper body sway softly.",
+        "Keep your hips square and your motion small and loose.",
+        "Come back to center. 6-8 sways."], "Skip the deep forward fold of the original; keep it a small, relaxed sway."),
+    ("Baduanjin 6: Two Hands Climb the Feet to Strengthen the Kidneys", [
+        "Stand with feet shoulder-width apart.",
+        "Slide your hands down your legs as far as is comfortable, knees soft.",
+        "Hands on your lower back, rub gently up and down your waist.",
+        "Rise slowly. Repeat 6 times."], "Fold only as far as is comfortable; skip the backward arch of the original."),
+    ("Baduanjin 7: Clench Fists and Glare Fiercely", [
+        "Take a shallow stance and make loose fists at your sides.",
+        "Slowly punch one fist forward at chest height, exhaling.",
+        "Pull it back as you punch with the other hand.",
+        "Keep your shoulders loose. 6 each side."], "Keep your stance shallow and your pelvic floor soft; don't brace."),
+    ("Baduanjin 8: Bouncing on the Toes", [
+        "Stand tall with your feet together.",
+        "Rise slowly onto your toes as you inhale.",
+        "Let your heels lower softly to the floor as you exhale.",
+        "Keep the movement tiny and gentle. 7 times."], "Lower your heels softly; no hard drops."),
+]
+
+
+def _qigong_card(name, steps, tip):
+    return {
+        "name": name, "dose": "6-8 slow repeats", "sets": 1, "why": None, "images": [], "gallery": [], "image_note": None,
+        "steps": steps + [BREATH], "tips": [tip], "safe": True, "warning": None, "muscles": ["whole body"],
+        "equipment": "bodyweight", "level": "beginner", "sources": ["Baduanjin qigong"], "category": "qigong", "cooldown": True,
+    }
+
+
+def cards():
+    return {"yoga": [_yoga_card(p) for p in YOGA], "qigong": [_qigong_card(*q) for q in QIGONG], "media_base": media_base()}
+
+
+def cooldown(kidney=0, pelvic_floor=0, minutes=8):
+    """A short cool-down: a few gentle poses, or breathing only when symptoms are high."""
+    c = cards()
+    pool = [y for y in c["yoga"] if y["cooldown"]]
+    high = (kidney or 0) > 6 or (pelvic_floor or 0) > 7
+    if high:
+        pool = [y for y in pool if y["category"] == "restorative"]
+    else:
+        # a calm order: spine wave, folds, hips, then rest
+        order = {"spine": 0, "strength": 1, "forward fold": 2, "hips": 3, "gentle backbend": 4, "restorative": 5}
+        pool.sort(key=lambda y: order.get(y["category"], 3))
+        pool = [y for y in pool if y["category"] != "restorative"] + [y for y in pool if y["category"] == "restorative"]
+        pool = [y for y in pool if y["category"] != "gentle backbend"]
+    take = max(2, int(minutes / 1.5))
+    picks = pool[:take - 1] + [y for y in pool if y["category"] == "restorative" and y not in pool[:take - 1]][:1]
+    return [dict(y, dose=y["dose"]) for y in picks]
+
+
+def cooldown_note(kidney=0, pelvic_floor=0):
+    if (kidney or 0) > 6 or (pelvic_floor or 0) > 7:
+        return "Symptoms were high last time, so this is rest and breathing only."
+    return "A gentle 8-minute wind-down chosen for your kidney and pelvic floor. Skip it any day you like."

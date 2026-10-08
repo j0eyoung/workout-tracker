@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2 - Mind & Body: Yoga, Qigong and Cool-Downs
+
+### 🌟 Features
+* **Mind & Body tab:** 47 yoga poses (steps, tips, safety notes, up to 5 pictures each) and the Baduanjin qigong routine, adjusted for the left kidney: head-only turns, hips square, folds only as far as is comfortable.
+* **Cool-down on Today:** a short, gentle yoga wind-down after cardio, picked from your last symptom scores. High kidney or pelvic floor scores give rest and breathing only.
+* **Safety:** deep twists, backbends, inversions, hard core work and extreme stretches are marked "not in auto picks" and never chosen automatically.
+* **Settings:** gear details the coach reads (weights, plates, bands), vibration plate and inversion table added as equipment, and an address for the yoga pictures.
+
+### 🔧 Changes
+* Yoga pictures come from the Yoga Posture Dataset on Kaggle (CC0) and are hosted outside the add-on.
 ## 0.3.1 - Settings Tab and In-App Claude Sign-In
 
 ### 🌟 Features

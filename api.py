@@ -18,13 +18,14 @@ from pydantic import BaseModel
 import coach
 import history
 import library
+import mindbody
 import ninjas_sync
 from db import DB_PATH, get_last_log
 from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -105,7 +106,10 @@ def plan():
     w = todays_workout()
     why = {a["name"]: a["why"] for a in w.get("accessories", [])}
     draft = history.load_draft(DB_PATH, today) or {}
+    last = get_last_log()
+    kidney, pf = last.get("kidney_flank_pain"), last.get("pelvic_floor_tightness")
     return {
+        "cooldown": {"note": mindbody.cooldown_note(kidney, pf), "cards": mindbody.cooldown(kidney, pf)},
         "date": today,
         "warmup": [how_to(n) for n in w["warmup"]],
         "strength": [how_to(n, why.get(n)) for n in w["strength"]],
@@ -192,13 +196,22 @@ def ask_coach(m: CoachMessage):
     return {"reply": reply, "error": error}
 
 
+@app.get("/api/mindbody")
+def mind_body():
+    return mindbody.cards()
+
+
 @app.get("/api/settings")
 def get_settings():
-    return {"equipment": library.selected_equipment(), "equipment_options": library.EQUIPMENT_OPTIONS}
+    return {"equipment": library.selected_equipment(), "equipment_options": library.EQUIPMENT_OPTIONS,
+            "media_base_url": library.load_settings().get("media_base_url", ""),
+            "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)}
 
 
 class Settings(BaseModel):
     equipment: list[str] | None = None
+    gear_notes: str | None = None
+    media_base_url: str | None = None
 
 
 @app.put("/api/settings")
@@ -207,6 +220,13 @@ def put_settings(s: Settings):
     if s.equipment is not None:
         # "bodyweight" is always available; unknown names are dropped
         patch["equipment"] = sorted({e for e in s.equipment if e in library.EQUIPMENT_OPTIONS} | {"bodyweight"})
+    if s.gear_notes is not None:
+        patch["gear_notes"] = s.gear_notes.strip()[:2000]
+    if s.media_base_url is not None:
+        url = s.media_base_url.strip().rstrip("/")
+        if url and not url.startswith("https://"):
+            raise HTTPException(400, "The media address must start with https://")
+        patch["media_base_url"] = url
     if patch:
         library.save_settings(patch)
     return get_settings()

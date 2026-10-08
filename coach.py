@@ -201,6 +201,9 @@ def ask(message, recent=()):
     conversation = "\n".join(f"{'Joe' if m.get('role') == 'user' else 'Coach'}: {m.get('content', '')}"
                              for m in list(recent)[-6:])
     prompt = SYSTEM_INSTRUCTION
+    import library  # late import: library is heavy and only the coach needs the notes
+    prompt += "\n\nEquipment available at home: " + ", ".join(library.selected_equipment()) + ".\n" + \
+        library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)
     if conversation:
         prompt += f"\n\nConversation so far:\n{conversation}"
     prompt += f"\n\nUser Update: {message}"

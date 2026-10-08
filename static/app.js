@@ -56,6 +56,7 @@ const state = {
     { role: "assistant", content: "Hey Joe, how did the left flank feel during those wall sits today?" },
   ],
   coachBusy: false,
+  mind: null, mindFilter: "all", mindQ: "",
   lib: { q: "", focus: "", muscle: "", equipment: "", pictures: true, filtered: false, data: null, results: [], offset: 0 },
 };
 
@@ -78,6 +79,7 @@ function howTo(ex) {
   return `<div class="howto">
     ${ex.warning ? `<div class="warning">${esc(ex.warning)}</div>` : ""}
     ${pictures(ex.images, ex.image_note)}
+    ${ex.gallery?.length > 2 ? `<div class="gallery">${ex.gallery.slice(2).map((u) => `<img src="${esc(u)}" alt="" loading="lazy">`).join("")}</div>` : ""}
     ${ex.dose ? `<div><strong>${esc(ex.dose)}</strong></div>` : ""}
     ${ex.steps?.length ? `<ol>${ex.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
     ${ex.tips?.length ? `<p class="small muted">Tips: ${esc(ex.tips.join(" "))}</p>` : ""}
@@ -233,7 +235,11 @@ function renderToday() {
       ${pictures(cardio.images)}
     </div>
 
-    <h2>4. Finish</h2>
+    ${p.cooldown?.cards?.length ? `<h2>4. Cool-down <span class="muted">(optional)</span></h2>
+    <p class="small muted" style="margin-top:0">${esc(p.cooldown.note)}</p>
+    ${p.cooldown.cards.map(mindCard).join("")}` : ""}
+
+    <h2>${p.cooldown?.cards?.length ? "5" : "4"}. Finish</h2>
     <div class="card">
       ${slider("rpe", "Overall effort")}
       ${slider("pf", "Pelvic floor tightness", "Higher numbers reduce impact cardio (running) next time.")}
@@ -447,12 +453,63 @@ async function renderSettings() {
       <div class="chips wrap">${s.equipment_options.map((o) =>
         `<button type="button" class="chip${mine.has(o) ? " on" : ""}" data-act="equip" data-v="${esc(o)}" aria-pressed="${mine.has(o)}">${esc(o)}</button>`).join("")}</div>
     </div>
+    <div class="card">
+      <label class="sub" for="gear-notes">Gear details (the coach reads this: weights, plates, tensions)</label>
+      <textarea id="gear-notes" style="min-height:150px">${esc(s.gear_notes)}</textarea>
+      <div class="row-actions"><button type="button" class="btn small" data-act="save-gear">Save gear details</button></div>
+    </div>
+    <h2>Yoga pictures</h2>
+    <div class="card">
+      <label class="sub" for="media-url">Address of the folder holding the yoga pictures (starts with https://)</label>
+      <input type="url" id="media-url" class="code-input" style="width:100%" value="${esc(s.media_base_url)}" placeholder="https://…/workout/yoga">
+      <div class="row-actions"><button type="button" class="btn small" data-act="save-media">Save</button></div>
+    </div>
     <h2>AI Coach</h2>
     ${c && c.signed_in
       ? `<div class="card"><h3>Claude connected</h3><p class="sub">The coach uses your Claude subscription.</p>
          <button type="button" class="btn small" data-act="claude-logout">Disconnect Claude</button></div>`
       : connectCard() || `<div class="card muted">Checking Claude…</div>`}
     `;
+}
+
+// --- Mind & Body: yoga, qigong ----------------------------------------------------------------
+
+function mindCard(e) {
+  const key = `m:${e.name}`;
+  const open = state.open.has(key);
+  return `<div class="card">
+    <button type="button" class="result" data-act="toggle" data-key="${esc(key)}" aria-expanded="${open}">
+      <h3>${esc(e.name)}</h3>
+      <div class="stats">
+        ${e.category ? `<span class="badge">${esc(e.category)}</span>` : ""}
+        ${e.level ? `<span class="badge">${esc(e.level)}</span>` : ""}
+        ${e.cooldown ? `<span class="badge">cool-down</span>` : ""}
+        ${e.safe ? "" : `<span class="badge bad">not in auto picks</span>`}
+      </div>
+    </button>
+    ${open ? howTo(e) : ""}
+  </div>`;
+}
+
+async function renderMindBody() {
+  if (!state.mind) state.mind = await api("api/mindbody");
+  const m = state.mind;
+  const f = state.mindFilter;
+  const yoga = m.yoga.filter((e) => (f === "all" || (f === "cooldown" && e.cooldown) || (f === "pictures" && e.images.length))
+    && (!state.mindQ || e.name.toLowerCase().includes(state.mindQ)));
+  $view.innerHTML = `
+    <h2>Qigong</h2>
+    <p class="small muted" style="margin-top:0">Baduanjin (eight pieces of brocade), adjusted for your kidney: head-only turns, hips square, folds only as far as is comfortable.</p>
+    ${m.qigong.map(mindCard).join("")}
+    <h2>Yoga</h2>
+    <div class="filters">
+      <input type="search" id="mind-q" placeholder="Search poses…" value="${esc(state.mindQ)}" aria-label="Search yoga poses">
+      <div class="chips">${[["all", "All"], ["cooldown", "Cool-down"], ["pictures", "With pictures"]].map(([v, l]) =>
+        `<button type="button" class="chip${f === v ? " on" : ""}" data-act="mind-filter" data-v="${v}">${l}</button>`).join("")}</div>
+    </div>
+    ${yoga.length ? yoga.map(mindCard).join("") : `<div class="empty">No poses match.</div>`}
+    ${m.media_base ? "" : `<p class="small muted">Pictures are off: set the media address in Settings.</p>`}
+    <footer class="credits">Yoga pictures: Yoga Posture Dataset on Kaggle (CC0). General wellness guidance, not medical advice.</footer>`;
 }
 
 // --- Library ----------------------------------------------------------------------------------
@@ -575,7 +632,21 @@ const actions = {
   },
   complete(el) { completeWorkout(el); },
   send() { sendCoach(); },
+  "mind-filter"(el) { state.mindFilter = el.dataset.v; render(); },
   "goto-settings"() { history.replaceState(null, "", "#settings"); showTab("settings"); },
+  async "save-media"() {
+    try {
+      state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ media_base_url: document.getElementById("media-url").value }) });
+      state.mind = null;
+      toast("Saved");
+    } catch { toast("That address must start with https://"); }
+  },
+  async "save-gear"() {
+    try {
+      state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ gear_notes: document.getElementById("gear-notes").value }) });
+      toast("Saved");
+    } catch { toast("Couldn't save"); }
+  },
   async equip(el) {
     const s = state.settings;
     const v = el.dataset.v;
@@ -637,6 +708,10 @@ $view.addEventListener("input", (e) => {
     const label = document.getElementById(`val-${t.dataset.finish}`);
     if (label) label.textContent = `${t.value}/10`;
     store.set(finishKey(), state.finish);
+  } else if (t.id === "mind-q") {
+    state.mindQ = t.value.trim().toLowerCase();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { render(); const q = document.getElementById("mind-q"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250);
   } else if (t.id === "lib-q") {
     state.lib.q = t.value;
     clearTimeout(searchTimer);
@@ -664,14 +739,14 @@ document.addEventListener("visibilitychange", () => {
 // --- Tabs -------------------------------------------------------------------------------------
 
 function render() {
-  const views = { today: renderToday, history: renderHistory, coach: renderCoach, library: renderLibrary, settings: renderSettings };
+  const views = { today: renderToday, history: renderHistory, coach: renderCoach, library: renderLibrary, mind: renderMindBody, settings: renderSettings };
   Promise.resolve(views[state.tab]()).catch(() => {
     $view.innerHTML = `<div class="empty">Couldn't load this page. Pull down to refresh or try again.</div>`;
   });
 }
 
 function showTab(tab) {
-  if (!["today", "history", "coach", "library", "settings"].includes(tab)) tab = "today";
+  if (!["today", "history", "coach", "library", "mind", "settings"].includes(tab)) tab = "today";
   state.tab = tab;
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   if (tab === "history") state.history = null;   // always fresh
