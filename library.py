@@ -33,22 +33,26 @@ BOOSTCAMP_FILE = os.path.join(HERE, "data", "boostcamp-exercises.json")
 SOURCE_NAMES = {
     "repdb": "RepDB",
     "fedb": "Free Exercise DB",
+    "ninjas": "API Ninjas",
     "sto": "Strength to Overcome",
     "boostcamp": "Boostcamp programs",
 }
 # Which source's name, instructions and pictures win when the same exercise appears twice
-SOURCE_PRIORITY = ["repdb", "fedb", "sto", "boostcamp"]
-CREDITS = ("Exercise data by RepDB (repdb.co) · Free Exercise DB (public domain) · "
+SOURCE_PRIORITY = ["repdb", "fedb", "ninjas", "sto", "boostcamp"]
+CREDITS = ("Exercise data by RepDB (repdb.co) · Free Exercise DB (public domain) · API Ninjas (api-ninjas.com) · "
            "Strength to Overcome functional fitness database · Boostcamp programs (Kaggle)")
 
 EQUIPMENT_CHOICES = [
     "bodyweight", "bands", "dumbbell", "kettlebell", "stability ball", "foam roller", "medicine ball",
     "bench", "pull-up bar", "cable", "machine", "barbell", "ez bar", "suspension trainer", "sliders",
-    "rings", "clubbell", "macebell", "sandbag", "landmine", "cardio machine", "other",
+    "rings", "clubbell", "macebell", "sandbag", "landmine", "plates", "cardio machine", "other",
 ]
+# Joe's home gym: rack with adjustable bench, Centr 1 cable machine, pull-up bar, bands, dumbbells,
+# EZ-curl bar, barbell, plates (25, 2 x 10, 2.5 lb), 15 lb kettlebell, foam roller, treadmill/Peloton/rower.
+# Barbell lifts are still filtered out by the safety rules.
 DEFAULT_EQUIPMENT = [
-    "bodyweight", "bands", "dumbbell", "kettlebell", "stability ball", "foam roller", "medicine ball",
-    "bench", "pull-up bar", "cable", "machine", "suspension trainer", "sliders", "other",
+    "bodyweight", "bands", "dumbbell", "kettlebell", "foam roller", "bench", "pull-up bar", "cable",
+    "ez bar", "barbell", "plates", "cardio machine",
 ]
 
 # --- Normalization -----------------------------------------------------------------------------
@@ -63,7 +67,7 @@ _EQUIPMENT_WORDS = [
     ("e-z", "ez bar"), ("ez bar", "ez bar"), ("ez curl", "ez bar"), ("trap bar", "barbell"),
     ("barbell", "barbell"), ("suspension", "suspension trainer"), ("trx", "suspension trainer"),
     ("slider", "sliders"), ("ring", "rings"), ("clubbell", "clubbell"), ("macebell", "macebell"),
-    ("sandbag", "sandbag"), ("landmine", "landmine"), ("treadmill", "cardio machine"),
+    ("sandbag", "sandbag"), ("landmine", "landmine"), ("plate", "plates"), ("treadmill", "cardio machine"),
     ("bike", "cardio machine"), ("elliptical", "cardio machine"), ("rower", "cardio machine"),
 ]
 
@@ -161,7 +165,7 @@ FLAG_REASONS = {
     "advanced": "advanced or expert level",
 }
 
-_FREE_WEIGHTS = {"dumbbell", "kettlebell", "barbell", "ez bar", "clubbell", "macebell", "sandbag", "landmine"}
+_FREE_WEIGHTS = {"dumbbell", "kettlebell", "barbell", "ez bar", "clubbell", "macebell", "sandbag", "landmine", "plates"}
 _LOADED = _FREE_WEIGHTS | {"medicine ball", "machine", "cable"}
 _HEAVY_CATEGORIES = {"powerlifting", "olympic weightlifting", "strongman"}
 _AXIAL_LOAD_POSITIONS = {"overhead", "front rack", "back rack", "zercher", "shoulder", "order"}
@@ -446,6 +450,10 @@ def _source_files():
     files = {"fedb": FEDB_FILE, "boostcamp": BOOSTCAMP_FILE,
              "repdb": _cached_download(REPDB_BASE + "exercises.json", "repdb.json"),
              "sto": _cached_download(STO_URL, "strength-to-overcome.csv")}
+    # API Ninjas is harvested in the background by ninjas_sync.py when a key is set
+    import ninjas_sync
+    if os.path.exists(ninjas_sync.STATE_FILE):
+        files["ninjas"] = ninjas_sync.STATE_FILE
     return {k: v for k, v in files.items() if v}
 
 
@@ -505,7 +513,9 @@ def build(db_path, force=False):
         conn.close()
         return None
 
-    loaders = {"fedb": load_fedb, "boostcamp": load_boostcamp, "repdb": load_repdb, "sto": load_sto}
+    import ninjas_sync
+    loaders = {"fedb": load_fedb, "boostcamp": load_boostcamp, "repdb": load_repdb, "sto": load_sto,
+               "ninjas": ninjas_sync.load_records}
     records, counts = [], {}
     for source, path in files.items():
         try:

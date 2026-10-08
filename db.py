@@ -43,6 +43,10 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # Set-by-set history and today's auto-saved draft
+    import history
+    history.ensure_schema(DB_PATH)
+
     # Merge the exercise databases (skipped when nothing changed since the last start)
     import library
     library.build(DB_PATH)

@@ -9,3 +9,14 @@ configuration:
     description: >-
       The daily plan adds extra exercises from the Exercise Library that use only this
       equipment. Barbell moves are always left out for your kidney.
+  api_ninjas_key:
+    name: API Ninjas key
+    description: >-
+      Optional. Adds API Ninjas' ~3,000 exercises to the Exercise Library. The free tier is
+      collected in the background over a day or two (5 exercises per call). Stays on your
+      Home Assistant.
+  api_ninjas_monthly_budget:
+    name: API Ninjas calls per month
+    description: >-
+      Most calls the add-on makes per month (free tier allows 3,000). It also stays under 90
+      calls an hour. Lower it if you use the same key elsewhere.

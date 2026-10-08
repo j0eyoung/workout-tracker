@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1 - Workout History, API Ninjas & Your Home Gym
+
+### 🌟 Features
+* **History tab:** every completed workout with its date, effort, symptoms, exercises, cardio and each set (weight, reps, done), plus a progress chart per exercise (heaviest weight and total reps by day).
+* **Sets saved as real rows** (new `workout_sets` table) instead of a block of text in the notes, so progress can be charted.
+* **Auto-save:** warm-up ticks and the set tracker save as you go. Closing or reloading the page no longer loses them, and a page left open overnight starts fresh the next day.
+* **API Ninjas exercises (optional):** add your free API Ninjas key in Configuration and the add-on collects their ~3,000 exercises (with steps and safety notes) in the background, staying under 90 calls an hour and your monthly budget (default 2,500 of the free 3,000). Progress shows on the Exercise Library tab.
+* **Weight plates** are now equipment (your 25, 2 x 10 and 2.5 lb plates). Plate-loaded moves get the same spine-loading checks as dumbbells.
+
+### 🔧 Fixes
+* **Workout dates use your Home Assistant time zone** instead of UTC, so evening workouts land on the right day.
+* **Equipment defaults to your home gym:** bodyweight, bands, dumbbells, 15 lb kettlebell, plates, foam roller, adjustable bench, pull-up bar, Centr 1 cable machine, EZ-curl bar, barbell and cardio machines. Daily extras no longer pick stability ball, medicine ball, gym-machine, suspension, slider or unknown-equipment exercises. Barbell lifts stay filtered out for your kidney. If you already saved Configuration, click **Reset to defaults** there (or tick the new items) to pick this up.
+
 ## 0.2.0 - Exercise Library (about 5,000 exercises)
 
 ### 🌟 Features

@@ -1,6 +1,6 @@
 name: "AI Workout Tracker"
 description: "Dynamic auto-regulating workout planner and tracker."
-version: "0.2.0"
+version: "0.2.1"
 slug: "ai_workout"
 image: "ghcr.io/j0eyoung/{arch}-ai-workout"
 arch:
@@ -22,20 +22,22 @@ options:
     - bands
     - dumbbell
     - kettlebell
-    - stability ball
     - foam roller
-    - medicine ball
     - bench
     - pull-up bar
     - cable
-    - machine
-    - suspension trainer
-    - sliders
-    - other
+    - ez bar
+    - barbell
+    - plates
+    - cardio machine
+  api_ninjas_key: ""
+  api_ninjas_monthly_budget: 2500
 schema:
   claude_code_oauth_token: password?
+  api_ninjas_key: password?
+  api_ninjas_monthly_budget: int(100,3000)?
   equipment:
-    - "list(bodyweight|bands|dumbbell|kettlebell|stability ball|foam roller|medicine ball|bench|pull-up bar|cable|machine|barbell|ez bar|suspension trainer|sliders|rings|clubbell|macebell|sandbag|landmine|cardio machine|other)"
+    - "list(bodyweight|bands|dumbbell|kettlebell|stability ball|foam roller|medicine ball|bench|pull-up bar|cable|machine|barbell|ez bar|suspension trainer|sliders|rings|clubbell|macebell|sandbag|landmine|plates|cardio machine|other)"
 ports:
   8501/tcp: 8501
   8000/tcp: 8000

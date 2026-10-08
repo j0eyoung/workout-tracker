@@ -16,6 +16,9 @@ fi
 # Initialize the database if it doesn't exist
 python3 db.py
 
+# Collect API Ninjas exercises in the background (does nothing without a key)
+python3 ninjas_sync.py &
+
 # Start the FastAPI background service for Claude Terminal
 uvicorn api:app --host 0.0.0.0 --port 8000 &
 

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from engine import WorkoutEngine
 from db import DB_PATH, get_last_log
+import history
 import library
 import sqlite3
 
@@ -27,8 +28,8 @@ def log_symptoms(log: SymptomLog):
     c = conn.cursor()
     c.execute("""
         INSERT INTO daily_logs (date, completed, rpe, pelvic_floor_tightness, kidney_flank_pain, notes, executed_workout)
-        VALUES (date('now'), 1, ?, ?, ?, ?, ?)
-    """, (log.rpe, log.pelvic_floor_tightness, log.kidney_flank_pain, log.notes, "{}"))
+        VALUES (?, 1, ?, ?, ?, ?, ?)
+    """, (history.local_today(), log.rpe, log.pelvic_floor_tightness, log.kidney_flank_pain, log.notes, "{}"))
     conn.commit()
     conn.close()
     return {"status": "success", "message": "Symptoms logged. Tomorrow's workout has been auto-regulated."}
