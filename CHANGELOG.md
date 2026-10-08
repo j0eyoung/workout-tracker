@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.3 - Meditation, More Yoga, Coach That Reads Your Data
+
+### 🌟 Features
+* **Meditation** in the Mind & Body tab: about 70 free guided practices (mindfulness, breathwork, yoga nidra, sleep, open awareness) from The Holistic Care's Stillness Library, played straight from their server. Nothing is stored on your Home Assistant.
+* **A session written for you:** pick a length (3, 5 or 10 minutes) and an optional focus. Claude writes a calm script with slow breathing, long exhales and no straining, and your phone reads it aloud.
+* **32 more yoga poses** (79 in total, including gentle floor work, supports like legs up the wall, mobility and four breathing practices with no breath holds). Every pose has steps and a safety note.
+
+### 🔧 Changes
+* **The coach no longer tries to run database commands.** It could not ask for approval from inside the app, so it stalled. The app now reads your recent workouts, symptoms, sets and Garmin data itself and gives them to the coach. The HTML progress report is written the same way.
+* If there is no Garmin data stored yet, the coach says so instead of guessing.
 ## 0.3.2 - Mind & Body: Yoga, Qigong and Cool-Downs
 
 ### 🌟 Features

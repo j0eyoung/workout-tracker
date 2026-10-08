@@ -18,6 +18,7 @@ from pydantic import BaseModel
 import coach
 import history
 import library
+import meditation
 import mindbody
 import ninjas_sync
 from db import DB_PATH, get_last_log
@@ -25,7 +26,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.3.2"
+VERSION = "0.3.3"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -199,6 +200,25 @@ def ask_coach(m: CoachMessage):
 @app.get("/api/mindbody")
 def mind_body():
     return mindbody.cards()
+
+
+@app.get("/api/meditation")
+def meditation_library():
+    items, error = meditation.practices()
+    return {"practices": items, "error": error, "credit": meditation.CREDIT,
+            "categories": [{"id": c, "label": meditation.LABELS.get(c, c.title())}
+                           for c in sorted({p["category"] for p in items})]}
+
+
+class ScriptRequest(BaseModel):
+    minutes: int = 5
+    focus: str = ""
+
+
+@app.post("/api/meditation/script")
+def meditation_script(r: ScriptRequest):
+    script, error = coach.meditation_script(max(2, min(r.minutes, 15)), r.focus)
+    return {"script": script, "error": error}
 
 
 @app.get("/api/settings")

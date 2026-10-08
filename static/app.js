@@ -57,6 +57,7 @@ const state = {
   ],
   coachBusy: false,
   mind: null, mindFilter: "all", mindQ: "",
+  med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
   lib: { q: "", focus: "", muscle: "", equipment: "", pictures: true, filtered: false, data: null, results: [], offset: 0 },
 };
 
@@ -474,10 +475,16 @@ async function renderSettings() {
 
 // --- Mind & Body: yoga, qigong ----------------------------------------------------------------
 
+function findMind(name) {
+  const pools = [state.mind?.yoga, state.mind?.qigong, state.plan?.cooldown?.cards];
+  for (const pool of pools) { const hit = (pool || []).find((e) => e.name === name); if (hit) return hit; }
+  return null;
+}
+
 function mindCard(e) {
   const key = `m:${e.name}`;
   const open = state.open.has(key);
-  return `<div class="card">
+  return `<div class="card" data-card="${esc(key)}">
     <button type="button" class="result" data-act="toggle" data-key="${esc(key)}" aria-expanded="${open}">
       <h3>${esc(e.name)}</h3>
       <div class="stats">
@@ -491,13 +498,78 @@ function mindCard(e) {
   </div>`;
 }
 
+// Meditation: guided audio streamed from The Holistic Care, plus a script Claude writes and the phone reads aloud.
+const speech = { queue: [], on: false };
+
+function stopSpeaking() {
+  speech.on = false;
+  speech.queue = [];
+  try { window.speechSynthesis.cancel(); } catch { /* not supported */ }
+}
+
+function speakScript(text) {
+  if (!("speechSynthesis" in window)) { toast("This browser can't read aloud"); return; }
+  stopSpeaking();
+  speech.on = true;
+  speech.queue = text.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  const next = () => {
+    if (!speech.on || !speech.queue.length) { speech.on = false; return; }
+    const u = new SpeechSynthesisUtterance(speech.queue.shift().replace(/\.{3}/g, ", , ,"));
+    u.rate = 0.82;
+    u.onend = () => setTimeout(next, 2500);   // a breath between paragraphs
+    u.onerror = () => { speech.on = false; };
+    window.speechSynthesis.speak(u);
+  };
+  next();
+}
+
+function meditationSection() {
+  const md = state.med;
+  const f = state.medFilter;
+  if (!md) return `<h2>Meditation</h2><div class="spinner">Loading…</div>`;
+  const list = md.practices.filter((p) => f === "all" || p.category === f);
+  const shown = list.slice(0, state.medShown);
+  return `<h2>Meditation</h2>
+    <div class="card">
+      <h3>A session written for you</h3>
+      <p class="sub">Claude writes a calm script (slow breathing, long exhales, no straining) and your phone reads it aloud.</p>
+      <div class="two-col">
+        <select id="med-minutes" aria-label="Length">${[3, 5, 10].map((m) => `<option value="${m}"${m === state.medMinutes ? " selected" : ""}>${m} minutes</option>`).join("")}</select>
+        <input class="code-input" id="med-focus" placeholder="Focus (optional)" value="${esc(state.medFocus)}" aria-label="Focus">
+      </div>
+      <div class="row-actions">
+        <button type="button" class="btn small" data-act="med-script" ${state.medBusy ? "disabled" : ""}>${state.medBusy ? "Writing…" : "Write my session"}</button>
+        ${state.medScript ? `<button type="button" class="btn small" data-act="med-read">▶ Read aloud</button>
+          <button type="button" class="btn small" data-act="med-stop">■ Stop</button>` : ""}
+      </div>
+      ${state.medError ? `<div class="warning" style="margin-top:8px">${esc(state.medError)}</div>` : ""}
+      ${state.medScript ? `<pre class="notes">${esc(state.medScript)}</pre>` : ""}
+    </div>
+    ${md.error ? `<div class="card warning">${esc(md.error)}</div>` : `
+    <div class="chips" style="margin:8px 0">${[{ id: "all", label: "All" }, ...md.categories].map((c) =>
+      `<button type="button" class="chip${f === c.id ? " on" : ""}" data-act="med-filter" data-v="${esc(c.id)}">${esc(c.label)}</button>`).join("")}</div>
+    ${shown.map((p) => `<div class="card">
+      <h3>${esc(p.title)}</h3>
+      <div class="stats"><span class="badge">${esc(p.label)}</span>${p.minutes ? `<span class="badge">~${p.minutes} min</span>` : ""}</div>
+      <p class="sub">${esc(p.excerpt || "")}</p>
+      <audio controls preload="none" src="${esc(p.audio_url)}" style="width:100%"></audio>
+    </div>`).join("")}
+    ${list.length > shown.length ? `<button type="button" class="btn small" data-act="med-more">Show more</button>` : ""}
+    <p class="small muted">${esc(md.credit)}</p>`}`;
+}
+
 async function renderMindBody() {
   if (!state.mind) state.mind = await api("api/mindbody");
+  if (!state.med) {
+    api("api/meditation").then((r) => { if (!r.error) state.med = r; else state.med = { ...r, practices: [] }; if (state.tab === "mind") render(); })
+      .catch(() => { state.med = { practices: [], categories: [], error: "Couldn't reach the meditation library." }; if (state.tab === "mind") render(); });
+  }
   const m = state.mind;
   const f = state.mindFilter;
   const yoga = m.yoga.filter((e) => (f === "all" || (f === "cooldown" && e.cooldown) || (f === "pictures" && e.images.length))
     && (!state.mindQ || e.name.toLowerCase().includes(state.mindQ)));
   $view.innerHTML = `
+    ${meditationSection()}
     <h2>Qigong</h2>
     <p class="small muted" style="margin-top:0">Baduanjin (eight pieces of brocade), adjusted for your kidney: head-only turns, hips square, folds only as far as is comfortable.</p>
     ${m.qigong.map(mindCard).join("")}
@@ -594,7 +666,11 @@ const actions = {
     const key = el.dataset.key;
     state.open.has(key) ? state.open.delete(key) : state.open.add(key);
     if (key.startsWith("w:") || key.startsWith("s:")) rerenderCard(key);
-    else render();
+    else if (key.startsWith("m:")) {   // redraw just this card so a playing meditation isn't interrupted
+      const card = $view.querySelector(`[data-card="${CSS.escape(key)}"]`);
+      const e = findMind(key.slice(2));
+      if (card && e) card.outerHTML = mindCard(e); else render();
+    } else render();
   },
   check(el) {
     const name = el.dataset.name;
@@ -633,6 +709,20 @@ const actions = {
   complete(el) { completeWorkout(el); },
   send() { sendCoach(); },
   "mind-filter"(el) { state.mindFilter = el.dataset.v; render(); },
+  "med-filter"(el) { state.medFilter = el.dataset.v; state.medShown = 10; render(); },
+  "med-more"() { state.medShown += 10; render(); },
+  "med-read"() { speakScript(state.medScript); },
+  "med-stop"() { stopSpeaking(); },
+  async "med-script"() {
+    state.medMinutes = Number(document.getElementById("med-minutes").value);
+    state.medFocus = document.getElementById("med-focus").value;
+    state.medBusy = true; state.medError = ""; render();
+    try {
+      const r = await api("api/meditation/script", { method: "POST", body: JSON.stringify({ minutes: state.medMinutes, focus: state.medFocus }) });
+      if (r.error) state.medError = `Couldn't write the session: ${r.error}`; else state.medScript = r.script;
+    } catch { state.medError = "Couldn't reach the coach."; }
+    state.medBusy = false; render();
+  },
   "goto-settings"() { history.replaceState(null, "", "#settings"); showTab("settings"); },
   async "save-media"() {
     try {

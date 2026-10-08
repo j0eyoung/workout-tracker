@@ -1,6 +1,8 @@
 """AI Coach: runs the Claude Code CLI with Joe's subscription token (no API fees)."""
+import datetime
 import json
 import os
+import sqlite3
 import re
 import shutil
 import subprocess
@@ -17,19 +19,56 @@ SYSTEM_INSTRUCTION = (
     "If Pelvic Floor Tightness > 7, you MUST ALSO explicitly refer the user to find a clinical professional using the Pelvic Floor PT Directory (https://github.com/pete0585/pelvic-floor-pt-directory). "
     "2. BIOMECHANICAL ANALYSIS (movement-systems): When prescribing any exercise, you must explain the movement system mechanics to ensure no compensatory spinal compression or asymmetric torque occurs due to the Pyeloplasty adhesions. "
     "3. CRITICAL COMMAND OVERRIDE: The user uses Garmin, NOT Strava. DO NOT attempt to run `endurance-coach auth` or sync Strava. "
-    f"Instead, read their training data and Resting Heart Rate from the 'garmin_metrics' table in the SQLite database '{DB_PATH}'. "
-    "Completed workouts are in 'daily_logs' (effort and symptoms) and 'workout_sets' (every set: exercise, weight, reps). "
+    "Instead, use the TRAINING DATA given below (Garmin resting heart rate, logged effort and symptoms, completed sets). "
+    "Never run commands or open files: you cannot, and everything you need is in this message. "
+    "If a section says no data, say so plainly. "
     "4. MEDICAL CONSTRAINTS: Left Kidney Pyeloplasty Adhesions (NO heavy axial load, NO asymmetric torque) and hypertonic pelvic floor (limit high-impact running). "
     "5. EXPLAINABLE PLANNING: When you propose or alter a workout, you must explain exactly which past verified data points or PT constraints led to that decision. "
     "Keep answers short and easy to read on a phone."
 )
 
 REPORT_INSTRUCTION = (
-    f"You are an expert AI data analyst. Read the SQLite database '{DB_PATH}': daily_logs, workout_sets and garmin_metrics. "
-    "Generate a beautiful, portable, single-file HTML dashboard summarizing the user's progress, effort (RPE) trends, "
-    "symptoms, weights lifted and Garmin data. Write the raw HTML directly into '/config/workout_tracker/progress_report.html'. "
-    "Do not output anything else."
+    "You are an expert AI data analyst. Using the TRAINING DATA below, generate a beautiful, portable, single-file HTML "
+    "dashboard summarizing the user's progress, effort (RPE) trends, symptoms, weights lifted and Garmin data. "
+    "Output only the raw HTML (starting with <!doctype html>), nothing else. You cannot run commands or open files."
 )
+
+
+def _table(conn, sql, params=()):
+    try:
+        cur = conn.execute(sql, params)
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+    except sqlite3.Error:
+        return None  # table missing
+
+
+def training_data(days=21):
+    """Recent data, read here so the coach never needs to run a database command (the CLI can't ask for approval)."""
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return "TRAINING DATA: the database could not be opened."
+    since = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    logs = _table(conn, "SELECT id, date, rpe, pelvic_floor_tightness, kidney_flank_pain, notes FROM daily_logs "
+                        "WHERE date >= ? ORDER BY id DESC LIMIT 30", (since,))
+    sets = _table(conn, "SELECT date, exercise, set_number, weight_lbs, reps FROM workout_sets WHERE date >= ? AND done = 1 "
+                        "ORDER BY id DESC LIMIT 150", (since,))
+    garmin = _table(conn, "SELECT date, resting_hr, latest_activity_type, duration_secs, avg_hr, max_hr FROM garmin_metrics "
+                          "ORDER BY id DESC LIMIT 14")
+    conn.close()
+
+    def section(title, rows, empty):
+        if not rows:
+            return f"{title}: {empty}"
+        return f"{title} ({len(rows)} rows, newest first):\n" + "\n".join(json.dumps(r, default=str) for r in rows)
+
+    return "TRAINING DATA (last %d days)\n" % days + "\n\n".join([
+        section("Logged workouts (effort and symptoms, 1-10)", logs, "no workouts logged in this period."),
+        section("Completed sets", sets, "no sets logged in this period."),
+        section("Garmin metrics", garmin, "none. The Garmin sync has not stored anything yet, so tell Joe the Garmin "
+                                           "connection still needs setting up (do not guess his heart rate)."),
+    ])
 
 
 # Sign-in happens inside the app (same flow as the Trading Terminal): `claude auth login --claudeai`
@@ -204,12 +243,35 @@ def ask(message, recent=()):
     import library  # late import: library is heavy and only the coach needs the notes
     prompt += "\n\nEquipment available at home: " + ", ".join(library.selected_equipment()) + ".\n" + \
         library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)
+    prompt += "\n\n" + training_data()
     if conversation:
         prompt += f"\n\nConversation so far:\n{conversation}"
     prompt += f"\n\nUser Update: {message}"
     return _run(prompt)
 
 
+def meditation_script(minutes, focus=""):
+    """A short spoken meditation script (the phone's browser reads it aloud)."""
+    words = int(minutes) * 110  # slow speaking pace
+    prompt = (
+        f"Write a guided meditation script of about {words} words (it will be read aloud slowly, about {minutes} minutes). "
+        "For Joe, who has a sensitive left kidney area after surgery and a tight pelvic floor. "
+        "Use slow breathing with LONG, soft exhales, relaxed belly and jaw, no breath holds and no bearing down. "
+        "Do not ask him to clench, squeeze or hold tension anywhere. Plain spoken language, short sentences, "
+        "pauses written as '...' and a new paragraph for each phase (settle, breath, body, focus, close). "
+        f"{'Theme: ' + focus.strip()[:200] + '. ' if focus and focus.strip() else ''}"
+        "Output only the script, with no title, notes or stage directions."
+    )
+    return _run(prompt, timeout=240)
+
+
 def report():
     os.makedirs("/config/workout_tracker", exist_ok=True)
-    return _run(REPORT_INSTRUCTION, timeout=600)
+    html, error = _run(REPORT_INSTRUCTION + "\n\n" + training_data(days=90), timeout=600)
+    if error:
+        return None, error
+    start = html.lower().find("<!doctype")
+    html = html[start:] if start >= 0 else html
+    with open("/config/workout_tracker/progress_report.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    return html, None
