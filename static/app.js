@@ -57,6 +57,7 @@ const state = {
   ],
   coachBusy: false,
   mind: null, mindFilter: "all", mindQ: "",
+  voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
   lib: { q: "", focus: "", muscle: "", equipment: "", pictures: true, filtered: false, data: null, results: [], offset: 0 },
 };
@@ -525,6 +526,50 @@ function speakScript(text) {
   next();
 }
 
+// Natural voices (Piper) made on the add-on. The phone's own voice is only a fallback.
+function voicePicker() {
+  const v = state.voices;
+  if (!v) return "";
+  return `<div class="two-col" style="margin-bottom:8px">
+    <select id="voice" aria-label="Voice" data-act-change="voice">${v.voices.map((o) =>
+      `<option value="${esc(o.id)}"${o.id === state.voice ? " selected" : ""}>${esc(o.label)} · ${esc(o.blurb)}${o.ready ? "" : " (downloads first time)"}</option>`).join("")}</select>
+    <button type="button" class="btn small" data-act="voice-preview">▶ Hear this voice</button>
+  </div>`;
+}
+
+function audioBlock() {
+  const a = state.audio;
+  if (!a) return "";
+  if (a.status === "ready") return `<audio controls autoplay src="api/tts/${esc(a.key)}/audio" style="width:100%;margin-top:10px"></audio>`;
+  if (a.status === "error") return `<div class="warning" style="margin-top:8px">Couldn't make the audio (${esc(a.error || "unknown error")}).</div>`;
+  const first = !state.voices?.voices.find((o) => o.id === state.voice)?.ready;
+  return `<div class="sub" id="tts-status" style="margin-top:10px">${a.status === "speaking" ? `Preparing audio… ${Math.round((a.progress || 0) * 100)}%`
+    : first ? "Downloading the voice (about 60 MB, first time only)…" : "Getting ready…"}</div>`;
+}
+
+let audioPoll;
+async function startAudio(text, preview = false) {
+  clearTimeout(audioPoll);
+  try {
+    state.audio = await api("api/tts", { method: "POST", body: JSON.stringify({ voice: state.voice, text, preview }) });
+  } catch { state.audio = { status: "error", error: "couldn't reach the add-on" }; }
+  render();
+  pollAudio();
+}
+
+function pollAudio() {
+  clearTimeout(audioPoll);
+  const a = state.audio;
+  if (!a || a.status === "ready" || a.status === "error") return;
+  audioPoll = setTimeout(async () => {
+    try { state.audio = await api(`api/tts/${a.key}`); } catch { state.audio = { status: "error", error: "lost connection" }; }
+    const el = document.getElementById("tts-status");
+    if (state.audio.status === "ready" || state.audio.status === "error" || !el) { if (state.tab === "mind") render(); }
+    else el.textContent = state.audio.status === "speaking" ? `Preparing audio… ${Math.round((state.audio.progress || 0) * 100)}%` : el.textContent;
+    pollAudio();
+  }, 1500);
+}
+
 function meditationSection() {
   const md = state.med;
   const f = state.medFilter;
@@ -535,15 +580,17 @@ function meditationSection() {
     <div class="card">
       <h3>A session written for you</h3>
       <p class="sub">Claude writes a calm script (slow breathing, long exhales, no straining) and your phone reads it aloud.</p>
+      ${voicePicker()}
       <div class="two-col">
         <select id="med-minutes" aria-label="Length">${[3, 5, 10].map((m) => `<option value="${m}"${m === state.medMinutes ? " selected" : ""}>${m} minutes</option>`).join("")}</select>
         <input class="code-input" id="med-focus" placeholder="Focus (optional)" value="${esc(state.medFocus)}" aria-label="Focus">
       </div>
       <div class="row-actions">
         <button type="button" class="btn small" data-act="med-script" ${state.medBusy ? "disabled" : ""}>${state.medBusy ? "Writing…" : "Write my session"}</button>
-        ${state.medScript ? `<button type="button" class="btn small" data-act="med-read">▶ Read aloud</button>
+        ${state.medScript && state.audio?.status === "error" ? `<button type="button" class="btn small" data-act="med-read">▶ Read with phone voice</button>
           <button type="button" class="btn small" data-act="med-stop">■ Stop</button>` : ""}
       </div>
+      ${audioBlock()}
       ${state.medError ? `<div class="warning" style="margin-top:8px">${esc(state.medError)}</div>` : ""}
       ${state.medScript ? `<pre class="notes">${esc(state.medScript)}</pre>` : ""}
     </div>
@@ -562,6 +609,9 @@ function meditationSection() {
 
 async function renderMindBody() {
   if (!state.mind) state.mind = await api("api/mindbody");
+  if (!state.voices) {
+    api("api/voices").then((v) => { state.voices = v; state.voice = v.selected; if (state.tab === "mind") render(); }).catch(() => {});
+  }
   if (!state.med) {
     api("api/meditation").then((r) => { if (!r.error) state.med = r; else state.med = { ...r, practices: [] }; if (state.tab === "mind") render(); })
       .catch(() => { state.med = { practices: [], categories: [], error: "Couldn't reach the meditation library." }; if (state.tab === "mind") render(); });
@@ -714,6 +764,7 @@ const actions = {
   "med-filter"(el) { state.medFilter = el.dataset.v; state.medShown = 10; render(); },
   "med-more"() { state.medShown += 10; render(); },
   "med-read"() { speakScript(state.medScript); },
+  "voice-preview"() { startAudio("", true); },
   "med-stop"() { stopSpeaking(); },
   async "med-script"() {
     state.medMinutes = Number(document.getElementById("med-minutes").value);
@@ -724,6 +775,7 @@ const actions = {
       if (r.error) state.medError = `Couldn't write the session: ${r.error}`; else state.medScript = r.script;
     } catch { state.medError = "Couldn't reach the coach."; }
     state.medBusy = false; render();
+    if (state.medScript && !state.medError) startAudio(state.medScript);
   },
   "goto-settings"() { history.replaceState(null, "", "#settings"); showTab("settings"); },
   async "save-media"() {
@@ -814,6 +866,12 @@ $view.addEventListener("input", (e) => {
 $view.addEventListener("change", (e) => {
   const t = e.target;
   if (t.dataset.actChange === "progress") loadProgress(t.value);
+  else if (t.dataset.actChange === "voice") {
+    state.voice = t.value;
+    state.audio = null;
+    api("api/settings", { method: "PUT", body: JSON.stringify({ voice: t.value }) }).catch(() => toast("Couldn't save the voice"));
+    render();
+  }
   else if (t.id === "lib-muscle") { state.lib.muscle = t.value; searchLibrary(); }
   else if (t.id === "lib-equipment") { state.lib.equipment = t.value; searchLibrary(); }
   else if (t.id === "lib-pictures") { state.lib.pictures = t.checked; searchLibrary(); }

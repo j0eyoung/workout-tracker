@@ -22,12 +22,13 @@ import media
 import meditation
 import mindbody
 import ninjas_sync
+import tts
 from db import DB_PATH, get_last_log
 from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.3.4"
+VERSION = "0.3.5"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -234,6 +235,41 @@ def meditation_script(r: ScriptRequest):
     return {"script": script, "error": error}
 
 
+@app.get("/api/voices")
+def voices():
+    return {"voices": tts.catalog(), "selected": library.load_settings().get("voice", tts.DEFAULT_VOICE)}
+
+
+class TTSRequest(BaseModel):
+    voice: str = tts.DEFAULT_VOICE
+    text: str = ""
+    preview: bool = False
+
+
+@app.post("/api/tts")
+def make_audio(r: TTSRequest):
+    text = tts.PREVIEW_TEXT if r.preview else r.text.strip()[:12000]
+    if not text:
+        raise HTTPException(400, "Nothing to read")
+    return tts.public(tts.start(r.voice, text))
+
+
+@app.get("/api/tts/{key}")
+def audio_status(key: str):
+    job = tts.status(key)
+    if not job:
+        raise HTTPException(404, "Unknown audio")
+    return tts.public(job)
+
+
+@app.get("/api/tts/{key}/audio")
+def audio_file(key: str):
+    job = tts.status(key)
+    if not job or job["status"] != "ready":
+        raise HTTPException(404, "Audio isn't ready")
+    return FileResponse(job["path"], media_type="audio/wav", headers={"Cache-Control": "private, max-age=86400"})
+
+
 @app.get("/api/settings")
 def get_settings():
     return {"equipment": library.selected_equipment(), "equipment_options": library.EQUIPMENT_OPTIONS,
@@ -245,6 +281,7 @@ class Settings(BaseModel):
     equipment: list[str] | None = None
     gear_notes: str | None = None
     media_base_url: str | None = None
+    voice: str | None = None
 
 
 @app.put("/api/settings")
@@ -255,6 +292,8 @@ def put_settings(s: Settings):
         patch["equipment"] = sorted({e for e in s.equipment if e in library.EQUIPMENT_OPTIONS} | {"bodyweight"})
     if s.gear_notes is not None:
         patch["gear_notes"] = s.gear_notes.strip()[:2000]
+    if s.voice is not None and s.voice in tts.VOICES:
+        patch["voice"] = s.voice
     if s.media_base_url is not None:
         url = s.media_base_url.strip().rstrip("/")
         if url and not url.startswith("https://"):

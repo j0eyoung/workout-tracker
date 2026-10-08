@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5 - Natural Voices for Meditation
+
+### 🌟 Features
+* **Pick your meditation voice.** Eight natural-sounding female voices (American, Scottish, British and Irish-English) made right on your Home Assistant with Piper, so there is no robotic phone voice and nothing is sent to a cloud service. Choose one under Meditation and tap "Hear this voice" to try it.
+* Sessions Claude writes for you now become a real audio file with the normal player (pause, scrub, replay). A session you already made opens instantly the next time.
+* A voice is about 60 MB and downloads the first time you pick it, so only the voices you use take space. The phone's own voice stays as a fallback if the audio can't be made.
 ## 0.3.4 - Yoga Pictures From Your Private Bucket
 
 ### 🌟 Features
