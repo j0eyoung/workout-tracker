@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4 - Yoga Pictures From Your Private Bucket
+
+### 🌟 Features
+* **Yoga pictures from a private bucket,** set up the same way as the Trading Terminal: fill in the bucket endpoint, name, access key and secret key on this add-on's Configuration tab. The add-on fetches each picture with the key, keeps a copy on the Green (a few MB), and the key never reaches your phone.
+* The bucket can stay private. Without the key set, Settings still accepts a public folder address instead.
 ## 0.3.3 - Meditation, More Yoga, Coach That Reads Your Data
 
 ### 🌟 Features

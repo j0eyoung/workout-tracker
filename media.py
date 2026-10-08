@@ -1,0 +1,72 @@
+"""Yoga pictures from a PRIVATE S3-compatible bucket (Backblaze B2), set up the same way as the Trading Terminal:
+endpoint, bucket and key from this add-on's Configuration tab.
+
+The page asks this add-on for `api/media/yoga/<file>.jpg`; the add-on fetches it from the bucket with the key
+(which never reaches the browser) and keeps a copy under /data/media-cache, so each picture is downloaded once.
+The pictures are CC0, so the cache is not sensitive."""
+import json
+import os
+import re
+
+OPTIONS_PATH = "/data/options.json"
+CACHE_DIR = os.getenv("MEDIA_CACHE_DIR", "/data/media-cache")
+NAME_RE = re.compile(r"^[a-z0-9-]+\.jpg$")
+_client = {"c": None, "sig": None}
+
+
+def settings():
+    try:
+        with open(OPTIONS_PATH, encoding="utf-8") as f:
+            o = json.load(f)
+    except (OSError, ValueError):
+        o = {}
+    prefix = (o.get("s3_prefix") or "workout/yoga").strip().strip("/")
+    return {"endpoint": (o.get("s3_endpoint") or "").strip(), "bucket": (o.get("s3_bucket") or "").strip(),
+            "key": (o.get("s3_access_key") or "").strip(), "secret": (o.get("s3_secret_key") or "").strip(),
+            "region": (o.get("s3_region") or "auto").strip() or "auto", "prefix": prefix}
+
+
+def configured():
+    s = settings()
+    return bool(s["endpoint"] and s["bucket"] and s["key"] and s["secret"])
+
+
+def _s3(s):
+    sig = (s["endpoint"], s["key"], s["secret"], s["region"])
+    if _client["c"] is None or _client["sig"] != sig:
+        import boto3
+        from botocore.config import Config
+        _client["c"] = boto3.client(
+            "s3", endpoint_url=s["endpoint"], aws_access_key_id=s["key"], aws_secret_access_key=s["secret"],
+            region_name=s["region"],
+            # same as the Trading Terminal: boto3 checksum headers can be refused by Backblaze B2
+            config=Config(retries={"max_attempts": 4, "mode": "standard"}, connect_timeout=10, read_timeout=60,
+                          request_checksum_calculation="when_required", response_checksum_validation="when_required"))
+        _client["sig"] = sig
+    return _client["c"]
+
+
+def get(name):
+    """Path of the cached picture, fetching it first if needed. Raises FileNotFoundError / RuntimeError."""
+    if not NAME_RE.match(name):
+        raise FileNotFoundError(name)
+    path = os.path.join(CACHE_DIR, name)
+    if os.path.exists(path):
+        return path
+    s = settings()
+    if not configured():
+        raise RuntimeError("the bucket key isn't set in the add-on's Configuration tab")
+    client = _s3(s)
+    try:
+        body = client.get_object(Bucket=s["bucket"], Key=f"{s['prefix']}/{name}")["Body"].read()
+    except Exception as e:
+        code = getattr(e, "response", {}).get("Error", {}).get("Code")
+        if code in ("NoSuchKey", "404"):
+            raise FileNotFoundError(name)
+        raise RuntimeError(code or str(e)[:120])
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(body)
+    os.replace(tmp, path)
+    return path

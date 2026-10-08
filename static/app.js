@@ -460,11 +460,13 @@ async function renderSettings() {
       <div class="row-actions"><button type="button" class="btn small" data-act="save-gear">Save gear details</button></div>
     </div>
     <h2>Yoga pictures</h2>
-    <div class="card">
+    ${s.media_private ? `<div class="card"><h3>Private bucket connected</h3><p class="sub">Pictures load from your private Backblaze B2 bucket through this add-on.</p></div>`
+    : `<div class="card">
+      <p class="sub" style="margin:0 0 10px">For a private bucket, fill in the bucket settings (endpoint, name, key) in this add-on's Configuration tab, the same as for the Trading Terminal. Or, for a public folder, paste its address:</p>
       <label class="sub" for="media-url">Address of the folder holding the yoga pictures (starts with https://)</label>
       <input type="url" id="media-url" class="code-input" style="width:100%" value="${esc(s.media_base_url)}" placeholder="https://…/workout/yoga">
       <div class="row-actions"><button type="button" class="btn small" data-act="save-media">Save</button></div>
-    </div>
+    </div>`}
     <h2>AI Coach</h2>
     ${c && c.signed_in
       ? `<div class="card"><h3>Claude connected</h3><p class="sub">The coach uses your Claude subscription.</p>

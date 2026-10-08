@@ -18,6 +18,7 @@ from pydantic import BaseModel
 import coach
 import history
 import library
+import media
 import meditation
 import mindbody
 import ninjas_sync
@@ -26,7 +27,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.3.3"
+VERSION = "0.3.4"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -197,6 +198,18 @@ def ask_coach(m: CoachMessage):
     return {"reply": reply, "error": error}
 
 
+@app.get("/api/media/yoga/{name}")
+def yoga_picture(name: str):
+    """A yoga picture from the private B2 bucket (cached on first use)."""
+    try:
+        path = media.get(name)
+    except FileNotFoundError:
+        raise HTTPException(404, "No such picture")
+    except Exception as e:
+        raise HTTPException(502, f"Couldn't load the picture: {e}")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=2592000"})
+
+
 @app.get("/api/mindbody")
 def mind_body():
     return mindbody.cards()
@@ -224,7 +237,7 @@ def meditation_script(r: ScriptRequest):
 @app.get("/api/settings")
 def get_settings():
     return {"equipment": library.selected_equipment(), "equipment_options": library.EQUIPMENT_OPTIONS,
-            "media_base_url": library.load_settings().get("media_base_url", ""),
+            "media_base_url": library.load_settings().get("media_base_url", ""), "media_private": media.configured(),
             "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)}
 
 

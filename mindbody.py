@@ -344,6 +344,11 @@ YOGA += [
 
 
 def media_base():
+    """Where the page loads yoga pictures from: this add-on (private B2 bucket) or a public address from Settings.
+    The relative path keeps working behind Home Assistant ingress."""
+    import media
+    if media.configured():
+        return "api/media/yoga"
     return (library.load_settings().get("media_base_url") or "").rstrip("/")
 
 

@@ -1,6 +1,6 @@
 name: "AI Workout Tracker"
 description: "Dynamic auto-regulating workout planner and tracker."
-version: "0.3.3"
+version: "0.3.4"
 slug: "ai_workout"
 image: "ghcr.io/j0eyoung/{arch}-ai-workout"
 arch:
@@ -32,7 +32,20 @@ options:
     - cardio machine
   api_ninjas_key: ""
   api_ninjas_monthly_budget: 2500
+  # Private bucket holding the yoga pictures (same S3-style settings as the Trading Terminal)
+  s3_endpoint: ""
+  s3_bucket: "lpchag"
+  s3_access_key: ""
+  s3_secret_key: ""
+  s3_region: "auto"
+  s3_prefix: "workout/yoga"
 schema:
+  s3_endpoint: url?
+  s3_bucket: str?
+  s3_access_key: password?
+  s3_secret_key: password?
+  s3_region: str?
+  s3_prefix: str?
   claude_code_oauth_token: password?
   api_ninjas_key: password?
   api_ninjas_monthly_budget: int(100,3000)?
