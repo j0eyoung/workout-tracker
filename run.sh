@@ -4,7 +4,11 @@
 # so it persists across updates and is accessible to Claude Terminal
 export DB_PATH="/config/workout_tracker.db"
 
-# Claude token from the add-on Configuration tab (made with `claude setup-token`).
+# The AI Coach tab signs in to Claude itself; the login is kept here so it survives updates.
+export CLAUDE_CONFIG_DIR="/data/claude"
+mkdir -p "$CLAUDE_CONFIG_DIR"
+
+# Optional fallback: Claude token from the add-on Configuration tab (made with `claude setup-token`).
 # Strip all whitespace: copying a wrapped token out of a terminal adds line breaks.
 token="$(python3 -c 'import json; print("".join((json.load(open("/data/options.json")).get("claude_code_oauth_token") or "").split()))' 2>/dev/null)"
 if [ -n "$token" ]; then

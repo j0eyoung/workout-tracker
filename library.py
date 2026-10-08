@@ -549,12 +549,46 @@ def build(db_path, force=False):
     return summary
 
 
-def selected_equipment(options_path="/data/options.json"):
-    """Equipment ticked in the add-on Configuration tab (defaults when not set)."""
+EQUIPMENT_OPTIONS = [
+    "bodyweight", "bands", "dumbbell", "kettlebell", "stability ball", "foam roller", "medicine ball", "bench",
+    "pull-up bar", "cable", "machine", "barbell", "ez bar", "suspension trainer", "sliders", "rings", "clubbell",
+    "macebell", "sandbag", "landmine", "plates", "cardio machine", "other",
+]
+
+# App settings live in one JSON file next to the database so they survive updates and can grow
+# (equipment now; sports and training goals later). The Settings tab is the only thing that writes it.
+SETTINGS_PATH = os.getenv("SETTINGS_PATH", "/config/workout_tracker/settings.json")
+
+
+def load_settings(path=None):
     try:
-        chosen = json.load(open(options_path, encoding="utf-8")).get("equipment")
+        with open(path or SETTINGS_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
-        chosen = None
+        return {}
+
+
+def save_settings(patch, path=None):
+    path = path or SETTINGS_PATH
+    settings = load_settings(path)
+    settings.update(patch)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2)
+    os.replace(tmp, path)
+    return settings
+
+
+def selected_equipment(options_path="/data/options.json"):
+    """Equipment chosen in the Settings tab, else the add-on Configuration tab, else the defaults."""
+    chosen = load_settings().get("equipment")
+    if chosen is None:
+        try:
+            chosen = json.load(open(options_path, encoding="utf-8")).get("equipment")
+        except (OSError, ValueError):
+            chosen = None
     return chosen or DEFAULT_EQUIPMENT
 
 

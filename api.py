@@ -24,7 +24,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -190,6 +190,56 @@ class CoachMessage(BaseModel):
 def ask_coach(m: CoachMessage):
     reply, error = coach.ask(m.message, m.recent)
     return {"reply": reply, "error": error}
+
+
+@app.get("/api/settings")
+def get_settings():
+    return {"equipment": library.selected_equipment(), "equipment_options": library.EQUIPMENT_OPTIONS}
+
+
+class Settings(BaseModel):
+    equipment: list[str] | None = None
+
+
+@app.put("/api/settings")
+def put_settings(s: Settings):
+    patch = {}
+    if s.equipment is not None:
+        # "bodyweight" is always available; unknown names are dropped
+        patch["equipment"] = sorted({e for e in s.equipment if e in library.EQUIPMENT_OPTIONS} | {"bodyweight"})
+    if patch:
+        library.save_settings(patch)
+    return get_settings()
+
+
+@app.get("/api/claude")
+def claude_state():
+    return coach.login_state()
+
+
+@app.post("/api/claude/login")
+def claude_login():
+    return coach.start_login()
+
+
+class LoginCode(BaseModel):
+    code: str
+
+
+@app.post("/api/claude/code")
+def claude_code(c: LoginCode):
+    return coach.send_code(c.code)
+
+
+@app.post("/api/claude/cancel")
+def claude_cancel():
+    return coach.cancel_login()
+
+
+@app.post("/api/claude/logout")
+def claude_logout():
+    coach.logout()
+    return coach.login_state()
 
 
 @app.post("/api/report")

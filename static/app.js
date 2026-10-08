@@ -362,19 +362,51 @@ async function renderHistory() {
 
 // --- Coach ------------------------------------------------------------------------------------
 
+function connectCard() {
+  const c = state.claude;
+  if (!c || c.signed_in) return "";
+  if (!c.cli) return `<div class="card warning">The Claude command-line tool isn't installed in this add-on, so the coach can't sign in.</div>`;
+  const l = c.login;
+  const failed = l && l.done && l.result && !c.signed_in;
+  if (l && !l.done) {
+    return `<div class="card">
+      <h3>Connect Claude</h3>
+      ${l.url ? `<p class="sub">1. Open the link and approve. 2. Paste the code it shows here.</p>
+        <p><a class="btn primary" style="display:grid;place-items:center;text-decoration:none" href="${esc(l.url)}" target="_blank" rel="noopener">Open Claude sign-in</a></p>
+        <div class="composer" style="position:static;padding:0"><input id="claude-code" class="code-input" placeholder="Paste code" autocomplete="off" aria-label="Sign-in code">
+        <button type="button" class="btn primary" style="width:auto" data-act="claude-code">Connect</button></div>`
+        : `<p class="sub">Getting a sign-in link…</p>`}
+      <button type="button" class="btn link" data-act="claude-cancel">Cancel</button></div>`;
+  }
+  return `<div class="card warning">
+    <p style="margin:0 0 8px">${failed ? esc(l.result) : "The coach needs to be connected to your Claude account."}</p>
+    <button type="button" class="btn primary" data-act="claude-login">Connect Claude</button></div>`;
+}
+
+async function loadClaude() {
+  try { state.claude = await api("api/claude"); } catch { /* keep the old state */ }
+  if ((state.tab === "coach" || state.tab === "settings") && !document.activeElement?.matches?.("#claude-code, #coach-input")) render();
+  clearTimeout(claudePoll);
+  const l = state.claude && state.claude.login;
+  if (l && !l.done) claudePoll = setTimeout(loadClaude, 2000);
+}
+let claudePoll;
+
 function renderCoach() {
-  const noToken = state.status && !state.status.claude_token;
+  if (!state.claude) loadClaude();
+  const signedOut = state.claude && !state.claude.signed_in;
   $view.innerHTML = `
-    ${noToken ? `<div class="card warning">No Claude token set. Run <code>claude setup-token</code> in Claude Terminal, paste the token into this add-on's Configuration tab, then restart the add-on.</div>` : ""}
+    ${signedOut ? `<div class="card warning"><p style="margin:0 0 8px">The coach isn't connected to your Claude account yet.</p>
+      <button type="button" class="btn primary" data-act="goto-settings">Connect in Settings</button></div>` : ""}
     <div class="chat">
       ${state.coach.map((m) => `<div class="msg ${m.role}${m.error ? " error" : ""}">${esc(m.content)}</div>`).join("")}
       ${state.coachBusy ? `<div class="msg assistant muted">Coach is thinking…</div>` : ""}
     </div>
     <div class="composer">
       <textarea id="coach-input" placeholder="E.g. my kidney is tight today…" aria-label="Message the coach"></textarea>
-      <button type="button" class="btn primary" style="width:auto" data-act="send" ${state.coachBusy ? "disabled" : ""}>Send</button>
+      <button type="button" class="btn primary" style="width:auto" data-act="send" ${state.coachBusy || signedOut ? "disabled" : ""}>Send</button>
     </div>`;
-  window.scrollTo({ top: document.body.scrollHeight });
+  if (!signedOut) window.scrollTo({ top: document.body.scrollHeight });
 }
 
 async function sendCoach() {
@@ -394,8 +426,33 @@ async function sendCoach() {
     state.coach.push({ role: "assistant", content: "Couldn't reach the coach. Check your connection.", error: true });
   }
   state.coachBusy = false;
+  if (state.coach[state.coach.length - 1].error) state.claude = null;  // re-check sign-in after a failure
   store.set("coach", state.coach.slice(-50));
   if (state.tab === "coach") renderCoach();
+}
+
+// --- Settings ---------------------------------------------------------------------------------
+// One tab for everything you can change. New sections (sports, training goals) go in as more cards.
+
+async function renderSettings() {
+  if (!state.claude) loadClaude();
+  if (!state.settings) state.settings = await api("api/settings");
+  const s = state.settings;
+  const mine = new Set(s.equipment);
+  const c = state.claude;
+  $view.innerHTML = `
+    <h2>Equipment</h2>
+    <div class="card">
+      <p class="sub" style="margin:0 0 10px">Daily plans only use what's ticked. Barbell moves stay out of your plans for your kidney either way.</p>
+      <div class="chips wrap">${s.equipment_options.map((o) =>
+        `<button type="button" class="chip${mine.has(o) ? " on" : ""}" data-act="equip" data-v="${esc(o)}" aria-pressed="${mine.has(o)}">${esc(o)}</button>`).join("")}</div>
+    </div>
+    <h2>AI Coach</h2>
+    ${c && c.signed_in
+      ? `<div class="card"><h3>Claude connected</h3><p class="sub">The coach uses your Claude subscription.</p>
+         <button type="button" class="btn small" data-act="claude-logout">Disconnect Claude</button></div>`
+      : connectCard() || `<div class="card muted">Checking Claude…</div>`}
+    `;
 }
 
 // --- Library ----------------------------------------------------------------------------------
@@ -518,6 +575,34 @@ const actions = {
   },
   complete(el) { completeWorkout(el); },
   send() { sendCoach(); },
+  "goto-settings"() { history.replaceState(null, "", "#settings"); showTab("settings"); },
+  async equip(el) {
+    const s = state.settings;
+    const v = el.dataset.v;
+    const next = new Set(s.equipment);
+    next.has(v) ? next.delete(v) : next.add(v);
+    next.add("bodyweight");
+    s.equipment = [...next];
+    el.classList.toggle("on", next.has(v));
+    try {
+      state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ equipment: s.equipment }) });
+      if (saveTimer) await saveDraft();   // keep any sets already typed, then rebuild today's plan
+      refreshPlan().catch(() => {});
+      toast("Saved");
+    } catch { toast("Couldn't save"); }
+    renderSettings();
+  },
+  async "claude-login"() { state.claude = await api("api/claude/login", { method: "POST" }); render(); loadClaude(); },
+  async "claude-code"() {
+    const code = document.getElementById("claude-code").value.trim();
+    if (!code) return;
+    state.claude = await api("api/claude/code", { method: "POST", body: JSON.stringify({ code }) });
+    render();
+    toast(state.claude.signed_in ? "Claude connected" : "Checking the code…");
+    loadClaude();
+  },
+  async "claude-cancel"() { state.claude = await api("api/claude/cancel", { method: "POST" }); render(); },
+  async "claude-logout"() { state.claude = await api("api/claude/logout", { method: "POST" }); render(); },
   focus(el) {
     state.lib.focus = el.dataset.v;
     $view.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.v === state.lib.focus));
@@ -579,14 +664,14 @@ document.addEventListener("visibilitychange", () => {
 // --- Tabs -------------------------------------------------------------------------------------
 
 function render() {
-  const views = { today: renderToday, history: renderHistory, coach: renderCoach, library: renderLibrary };
+  const views = { today: renderToday, history: renderHistory, coach: renderCoach, library: renderLibrary, settings: renderSettings };
   Promise.resolve(views[state.tab]()).catch(() => {
     $view.innerHTML = `<div class="empty">Couldn't load this page. Pull down to refresh or try again.</div>`;
   });
 }
 
 function showTab(tab) {
-  if (!["today", "history", "coach", "library"].includes(tab)) tab = "today";
+  if (!["today", "history", "coach", "library", "settings"].includes(tab)) tab = "today";
   state.tab = tab;
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   if (tab === "history") state.history = null;   // always fresh

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 - Settings Tab and In-App Claude Sign-In
+
+### 🌟 Features
+* **Settings tab:** pick the equipment you have by tapping chips. Today's plan rebuilds as soon as you change it. More settings (sports, training goals) will go here later.
+* **Connect Claude inside the app:** Settings > Connect Claude gives you a sign-in link, you paste the code back, and the coach uses your Claude subscription. No more `claude setup-token`. The login is kept across updates.
+
+### 🔧 Changes
+* An old, expired token in the Configuration tab no longer breaks the coach once you have signed in (that was the "401 Invalid bearer token" error).
+* When the sign-in expires, the coach tells you to reconnect instead of showing a raw error.
+
 ## 0.3.0 - Fast Phone-First App
 
 ### 🌟 Features
