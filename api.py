@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from engine import WorkoutEngine
 from db import DB_PATH, get_last_log
+import library
 import sqlite3
 
 app = FastAPI(title="AI Workout API", description="API for Claude Terminal to control HA Workouts")
@@ -16,7 +17,8 @@ class SymptomLog(BaseModel):
 @app.get("/workout/today")
 def get_todays_workout():
     """Claude Terminal can call this to see what Joe is supposed to do today."""
-    return engine.generate_next_workout(get_last_log())
+    return engine.generate_next_workout(get_last_log(), library=library.get_library(DB_PATH),
+                                        equipment=library.selected_equipment())
 
 @app.post("/workout/log")
 def log_symptoms(log: SymptomLog):

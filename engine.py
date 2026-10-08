@@ -1,5 +1,6 @@
 import datetime
 import json
+import random
 
 # Starting minutes for each cardio type, all at an easy pace (Zone 2)
 CARDIO_BASE_MINUTES = {"recovery": 15, "swim": 20, "bike": 30, "run": 20, "walk": 20}
@@ -15,12 +16,44 @@ CARDIO_TEXT = {
     "walk": "Treadmill incline walk",
 }
 
+# Extra exercises drawn from the exercise library each day: (goal tag, why it is in the plan)
+ACCESSORY_SLOTS = [
+    ("legs", "Snowboard legs: edge control and quad endurance"),
+    ("upper back", "Posture and swim pulling strength"),
+    ("core", "Core control without crunching"),
+    ("mobility", "Mobility"),
+]
+RECOVERY_SLOTS = [("mobility", "Recovery-day stretch"), ("mobility", "Recovery-day stretch")]
+RECOVERY_MUSCLES = {"glutes", "hamstrings", "adductors", "abductors", "hip flexors", "quads", "lower back"}
+
+
+def pick_accessories(library, equipment, today, recovery, exclude):
+    """Safe library exercises for today's open slots. Same picks all day, new picks tomorrow."""
+    rng = random.Random(today.isoformat())
+    pool = [e for e in library if e["safe"] and e["equipment"] in equipment and e["name"] not in exclude]
+    picks = []
+    for goal, why in (RECOVERY_SLOTS if recovery else ACCESSORY_SLOTS):
+        taken = {p["name"] for p in picks}
+        options = [e for e in pool if goal in e["goal_tags"] and e["name"] not in taken]
+        if recovery:
+            options = [e for e in options if RECOVERY_MUSCLES & set(e["muscles"])]
+        if goal == "core":
+            # Weak TVA: stay with beginner-level core work
+            options = [e for e in options if e["level"] == "beginner"] or options
+        # Prefer exercises with pictures and written steps
+        options = ([e for e in options if e["images"] and e["instructions"]]
+                   or [e for e in options if e["images"]] or options)
+        if options:
+            e = rng.choice(sorted(options, key=lambda x: x["name"]))
+            picks.append({"name": e["name"], "why": why})
+    return picks
+
 
 class WorkoutEngine:
     def __init__(self, db_path="workout_tracker.db"):
         self.db_path = db_path
 
-    def generate_next_workout(self, last_log, today=None):
+    def generate_next_workout(self, last_log, today=None, library=None, equipment=None):
         """
         Dynamically builds the next workout based on active goals
         (Triathlon, Snowboard) and current medical symptoms.
@@ -44,6 +77,7 @@ class WorkoutEngine:
             # Flank is acting up: Force a recovery day, no twisting, lots of breathing
             workout_plan["strength"].append("Supported Butterfly Pose (3 mins)")
             workout_plan["strength"].append("Child's Pose (Focus on left rib expansion)")
+            self._add_accessories(workout_plan, library, equipment, today, recovery=True)
             self._set_cardio(workout_plan, "recovery", rpe, kidney_pain, last_workout, today)
             return workout_plan
 
@@ -54,6 +88,8 @@ class WorkoutEngine:
         if "snowboarding" in active_goals or "skiing" in active_goals:
             # Inject lateral edge control and quad endurance (Zero spinal load)
             workout_plan["strength"].extend(["Wall Sits (45s)", "Banded Lateral Walks", "Wall Tibialis Raises"])
+
+        self._add_accessories(workout_plan, library, equipment, today, recovery=False)
 
         # --- CARDIO & TRIATHLON PROGRAMMING ---
         if "triathlon" in active_goals:
@@ -73,6 +109,13 @@ class WorkoutEngine:
         self._set_cardio(workout_plan, cardio_type, rpe, kidney_pain, last_workout, today)
 
         return workout_plan
+
+    def _add_accessories(self, workout_plan, library, equipment, today, recovery):
+        if not library:
+            return
+        picks = pick_accessories(library, set(equipment or []), today, recovery, set(workout_plan["strength"]))
+        workout_plan["strength"].extend(p["name"] for p in picks)
+        workout_plan["accessories"] = picks
 
     def _set_cardio(self, workout_plan, cardio_type, rpe, kidney_pain, last_workout, today):
         minutes, progressed_on, note = self._cardio_minutes(cardio_type, rpe, kidney_pain, last_workout, today)

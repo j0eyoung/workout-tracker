@@ -5,29 +5,60 @@ import sqlite3
 from engine import WorkoutEngine
 from db import DB_PATH, get_last_log
 from exercises import GUIDES, CARDIO_IMAGES
+import library
 
 st.set_page_config(page_title="AI Rehab & Training", layout="centered")
 
-# Demo photos: stack the start and end photo and flip between them like a GIF
+# Demo pictures: stack the start and finish picture and flip between them like a GIF
 st.markdown("""
 <style>
 .ex-flip { display: grid; max-width: 320px; margin-bottom: 0.5rem; }
 .ex-flip img { grid-area: 1 / 1; width: 100%; border-radius: 8px; }
-.ex-flip img:last-child { animation: ex-flip 1.6s steps(1, end) infinite; }
+.ex-flip.two img:last-child { animation: ex-flip 1.6s steps(1, end) infinite; }
 @keyframes ex-flip { 50% { opacity: 0; } }
 </style>
 """, unsafe_allow_html=True)
 
 engine = WorkoutEngine()
 
-def show_images(urls):
-    # Start photo last so it is on top when the animation begins
-    imgs = "".join(f'<img src="{u}" alt="">' for u in reversed(urls))
-    st.markdown(f'<div class="ex-flip">{imgs}</div>', unsafe_allow_html=True)
+@st.cache_data(ttl=3600)
+def load_library():
+    return library.get_library(DB_PATH)
 
-def show_guide(name):
+LIBRARY = load_library()
+LIBRARY_BY_NAME = {e["name"]: e for e in LIBRARY}
+
+def show_images(urls):
+    # Start picture last so it is on top when the animation begins
+    imgs = "".join(f'<img src="{u}" alt="">' for u in reversed(urls))
+    flip = " two" if len(urls) > 1 else ""
+    st.markdown(f'<div class="ex-flip{flip}">{imgs}</div>', unsafe_allow_html=True)
+
+def show_library_entry(e, why=None):
+    if not e["safe"]:
+        reasons = "; ".join(library.FLAG_REASONS.get(f, f) for f in e["constraint_tags"])
+        st.warning(f"Filtered out of your plans: {reasons}.")
+    if why:
+        st.caption(f"Why it's in today's plan: {why}")
+    if e["images"]:
+        show_images(e["images"])
+        if (e["image_match"] or "").startswith("similar"):
+            st.caption(f"Picture shows a similar movement ({e['image_match'][9:]}).")
+    st.markdown(f"**{library.dose_for(e)[0]}**")
+    if e["instructions"]:
+        st.markdown("\n".join(f"1. {step}" for step in e["instructions"]))
+    if e["tips"]:
+        st.markdown("Tips: " + " ".join(e["tips"]))
+    facts = [f"Muscles: {', '.join(e['muscles'])}" if e["muscles"] else "",
+             f"Equipment: {e['equipment']}", f"Level: {e['level']}" if e["level"] else "",
+             "Sources: " + ", ".join(library.SOURCE_NAMES[s] for s in e["sources"])]
+    st.caption(" · ".join(f for f in facts if f))
+
+def show_guide(name, why=None):
     guide = GUIDES.get(name)
     if not guide:
+        if name in LIBRARY_BY_NAME:
+            show_library_entry(LIBRARY_BY_NAME[name], why)
         return
     if guide.get("images"):
         show_images(guide["images"])
@@ -36,9 +67,16 @@ def show_guide(name):
     st.markdown(f"**{guide['dose']}**")
     st.markdown("\n".join(f"1. {cue}" for cue in guide["cues"]))
 
+def dose(name):
+    if name in GUIDES:
+        return GUIDES[name]["dose"], GUIDES[name].get("sets", 3)
+    if name in LIBRARY_BY_NAME:
+        return library.dose_for(LIBRARY_BY_NAME[name])
+    return None, 3
+
 def label(name):
-    guide = GUIDES.get(name)
-    return f"{name} · {guide['dose']}" if guide else name
+    text = dose(name)[0]
+    return f"{name} · {text.split('.')[0]}" if text else name
 
 def save_log(rpe, pf, kidney, notes, workout_json):
     conn = sqlite3.connect(DB_PATH)
@@ -55,9 +93,10 @@ st.title("🏂🏊‍♂️ AI Training Hub")
 st.caption("Auto-regulated for Pyeloplasty Rehab & Pelvic Floor Health")
 
 last_log = get_last_log()
-todays_workout = engine.generate_next_workout(last_log)
+todays_workout = engine.generate_next_workout(last_log, library=LIBRARY, equipment=library.selected_equipment())
+accessory_why = {a["name"]: a["why"] for a in todays_workout.get("accessories", [])}
 
-tab1, tab2, tab3 = st.tabs(["📋 Today's Plan", "🧠 AI Coach", "📊 Progress Reports"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Today's Plan", "🧠 AI Coach", "📊 Progress Reports", "📚 Exercise Library"])
 
 with tab1:
     st.header("Today's Dynamic Plan")
@@ -71,7 +110,7 @@ with tab1:
     st.subheader("2. Strength & Stability")
     for item in todays_workout["strength"]:
         with st.expander(label(item)):
-            show_guide(item)
+            show_guide(item, accessory_why.get(item))
 
     st.subheader("📋 Live Set Tracker")
     st.write("Log your exact weights and reps here. You can add or delete rows as you go.")
@@ -80,8 +119,8 @@ with tab1:
     if "tracker_data" not in st.session_state:
         rows = []
         for item in todays_workout["strength"]:
-            # One row per prescribed set (3 if the exercise has no guide)
-            for s in range(1, GUIDES.get(item, {}).get("sets", 3) + 1):
+            # One row per prescribed set (3 if the exercise has no dose)
+            for s in range(1, dose(item)[1] + 1):
                 rows.append({"Done": False, "Exercise": item[:30], "Set": s, "Weight (lbs)": 0, "Reps": 0})
         if not rows:
             rows = [{"Done": False, "Exercise": "Custom", "Set": 1, "Weight (lbs)": 0, "Reps": 0}]
@@ -204,3 +243,39 @@ with tab3:
             )
             subprocess.run(["claude", "-p", report_instruction], capture_output=True, text=True)
             st.success("Report generated! Check your Home Assistant /config/workout_tracker folder for 'progress_report.html'.")
+
+with tab4:
+    st.header("Exercise Library")
+    safe_count = sum(e["safe"] for e in LIBRARY)
+    st.caption(f"{len(LIBRARY)} exercises from {len(library.SOURCE_NAMES)} databases · "
+               f"{safe_count} safe for you · {len(LIBRARY) - safe_count} filtered out for your kidney, pelvic floor or core")
+
+    c1, c2 = st.columns(2)
+    query = c1.text_input("Search", placeholder="e.g. glute bridge")
+    focus = c2.selectbox("Focus", ["All", "legs", "upper back", "core", "mobility", "balance"])
+    c3, c4 = st.columns(2)
+    muscle = c3.selectbox("Muscle", ["All"] + sorted({m for e in LIBRARY for m in e["muscles"]}))
+    equipment_filter = c4.selectbox("Equipment", ["All"] + sorted({e["equipment"] for e in LIBRARY}))
+    c5, c6 = st.columns(2)
+    pictures_only = c5.toggle("Only with pictures", value=True)
+    show_filtered = c6.toggle("Show filtered-out exercises")
+
+    words = query.lower().split()
+    results = [
+        e for e in LIBRARY
+        if (show_filtered or e["safe"])
+        and (not pictures_only or e["images"])
+        and all(w in e["name"].lower() for w in words)
+        and (focus == "All" or focus in e["goal_tags"])
+        and (muscle == "All" or muscle in e["muscles"])
+        and (equipment_filter == "All" or e["equipment"] == equipment_filter)
+    ]
+    st.write(f"**{len(results)} matches**")
+    for e in results[:30]:
+        with st.expander(f"{e['name']} · {e['equipment']}" + ("" if e["safe"] else " · ⚠️ filtered out")):
+            show_library_entry(e)
+    if len(results) > 30:
+        st.caption("Showing the first 30. Narrow the search to see the rest.")
+
+st.divider()
+st.caption(library.CREDITS)

@@ -1,14 +1,18 @@
-"""How-to guides for each exercise: dose, form cues and optional demo photos.
+"""How-to guides for each exercise: dose, form cues and optional demo pictures.
 
-Photos come from the public-domain Free Exercise DB (github.com/yuhonas/free-exercise-db).
-Each one has a start and an end photo that the app flips between like a GIF.
+Pictures come from RepDB (repdb.co) illustrations and the public-domain Free Exercise DB.
+Two pictures (start and finish) flip like a GIF; one picture shows as is.
 """
 
-IMAGE_BASE = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/"
+from library import FEDB_IMAGES, REPDB_BASE
 
 
 def _frames(exercise_id):
-    return [f"{IMAGE_BASE}{exercise_id}/0.jpg", f"{IMAGE_BASE}{exercise_id}/1.jpg"]
+    return [f"{FEDB_IMAGES}{exercise_id}/0.jpg", f"{FEDB_IMAGES}{exercise_id}/1.jpg"]
+
+
+def _repdb(*names):
+    return [f"{REPDB_BASE}images/flat/{n}.webp" for n in names]
 
 
 # Keyed by the exact names engine.py prescribes
@@ -51,8 +55,8 @@ GUIDES = {
     "Wall-Push Deadbugs": {
         "dose": "2 x 8 each side",
         "sets": 2,
-        "images": _frames("Dead_Bug"),
-        "image_note": "Photo shows a standard dead bug. For yours, press your hands flat into a wall behind your head.",
+        "images": _repdb("dead-bug-start", "dead-bug-peak"),
+        "image_note": "Picture shows a standard dead bug. For yours, press your hands flat into a wall behind your head.",
         "cues": [
             "Lie on your back with your head near a wall, arms overhead, palms pushing into the wall.",
             "Lift your knees to 90/90 (knees over hips, shins level).",
@@ -63,6 +67,7 @@ GUIDES = {
     "Wall Sits (45s)": {
         "dose": "3 x 45 s, 60 s rest",
         "sets": 3,
+        "images": _repdb("wall-sit-main"),
         "cues": [
             "Back flat against the wall, feet about shoulder-width and a step out from the wall.",
             "Slide down until your knees are near 90 degrees (stay higher if needed). Knees over ankles.",
@@ -72,8 +77,7 @@ GUIDES = {
     "Banded Lateral Walks": {
         "dose": "2 x 10 steps each way",
         "sets": 2,
-        "images": _frames("Monster_Walk"),
-        "image_note": "Photo shows a monster walk. For yours, step straight sideways.",
+        "images": _repdb("banded-lateral-walk-start", "banded-lateral-walk-peak"),
         "cues": [
             "Band just above your knees or around your ankles. Sit into a shallow half-squat.",
             "Step sideways, keeping tension on the band the whole time. Toes point forward.",
@@ -92,8 +96,8 @@ GUIDES = {
     "Supported Butterfly Pose (3 mins)": {
         "dose": "3 min",
         "sets": 1,
-        "images": _frames("Butterfly"),
-        "image_note": "Photo shows the seated version. For yours, lie back with pillows under your knees and back.",
+        "images": _repdb("butterfly-stretch-main"),
+        "image_note": "Picture shows the seated version. For yours, lie back with pillows under your knees and back.",
         "cues": [
             "Lie back on pillows or a bolster, soles of the feet together, knees falling out to the sides.",
             "Support each knee with a pillow so nothing strains.",
@@ -103,7 +107,7 @@ GUIDES = {
     "Child's Pose (Focus on left rib expansion)": {
         "dose": "1-2 min",
         "sets": 1,
-        "images": _frames("Childs_Pose"),
+        "images": _repdb("childs-pose-main"),
         "cues": [
             "Kneel with knees wide and sit back toward your heels, arms reaching forward.",
             "Breathe into your back ribs, especially the left side.",

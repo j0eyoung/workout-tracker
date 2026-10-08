@@ -4,3 +4,8 @@ configuration:
     description: >-
       Lets the AI Coach use your Claude Max subscription (no API fees). Run
       `claude setup-token` in the Claude Terminal add-on and paste the token here.
+  equipment:
+    name: Equipment you have
+    description: >-
+      The daily plan adds extra exercises from the Exercise Library that use only this
+      equipment. Barbell moves are always left out for your kidney.

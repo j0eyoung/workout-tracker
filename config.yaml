@@ -1,6 +1,6 @@
 name: "AI Workout Tracker"
 description: "Dynamic auto-regulating workout planner and tracker."
-version: "0.1.9"
+version: "0.2.0"
 slug: "ai_workout"
 image: "ghcr.io/j0eyoung/{arch}-ai-workout"
 arch:
@@ -16,8 +16,26 @@ map:
   - config:rw
 options:
   claude_code_oauth_token: ""
+  # Equipment you have; daily library picks only use these
+  equipment:
+    - bodyweight
+    - bands
+    - dumbbell
+    - kettlebell
+    - stability ball
+    - foam roller
+    - medicine ball
+    - bench
+    - pull-up bar
+    - cable
+    - machine
+    - suspension trainer
+    - sliders
+    - other
 schema:
   claude_code_oauth_token: password?
+  equipment:
+    - "list(bodyweight|bands|dumbbell|kettlebell|stability ball|foam roller|medicine ball|bench|pull-up bar|cable|machine|barbell|ez bar|suspension trainer|sliders|rings|clubbell|macebell|sandbag|landmine|cardio machine|other)"
 ports:
   8501/tcp: 8501
   8000/tcp: 8000

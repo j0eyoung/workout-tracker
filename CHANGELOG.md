@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 - Exercise Library (about 5,000 exercises)
+
+### 🌟 Features
+* **Exercise Library:** merges four databases into one list of about 5,000 exercises, stored in the `exercise_library` table of `/config/workout_tracker.db`:
+  * Free Exercise DB (876, public domain, photos and steps)
+  * RepDB (609, illustrations, steps and tips). Exercise data by RepDB (repdb.co)
+  * Strength to Overcome functional fitness database (3,242, detailed movement tags)
+  * Boostcamp programs (830 exercise names with typical sets and reps)
+* **Safety filter for your kidney, pelvic floor and core:** every exercise is checked for torso twisting, weight loading the spine, one-sided weight, crunch/sit-up/plank pressure, jumping, explosive swings, heavy barbell lifting, lower-back loading, upside-down positions and advanced level. About 1,850 pass; the rest stay browsable with the reason they're left out.
+* **Pictures across sources:** exercises without their own picture borrow the picture of a closely similar movement, labeled as such.
+* **New 📚 Exercise Library tab:** search and filter by focus (legs, upper back, core, mobility, balance), muscle and equipment.
+* **Daily plan adds 4 rotating extras** from the safe list: snowboard legs, posture/swim pulling, beginner core and mobility (2 gentle stretches on recovery days). New picks each day, each with a "why it's in today's plan" line.
+* **Equipment setting:** choose the equipment you have in the add-on Configuration tab; daily extras only use that equipment.
+* **Better pictures for your own moves:** Wall Sit, Dead Bug, Banded Lateral Walk, Butterfly and Child's Pose now use RepDB illustrations.
+
 ## 0.1.9 - Cardio Minutes, Exercise Guides & Coach Errors
 
 ### 🌟 Features

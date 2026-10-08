@@ -23,18 +23,8 @@ def init_db():
         default_goals = json.dumps(["snowboarding", "triathlon", "posture_restoration"])
         c.execute('INSERT INTO user_profile (id, active_goals, fitness_level) VALUES (1, ?, ?)', (default_goals, "intermediate"))
     
-    # 2. Master Exercise Library (Tagged by goal and constraint)
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS exercise_library (
-            id INTEGER PRIMARY KEY,
-            name TEXT,
-            primary_muscle TEXT,
-            goal_tags JSON,       -- e.g., ["snowboarding", "skiing"]
-            constraint_tags JSON, -- e.g., ["no_axial_load", "safe_for_kidney"]
-            impact_level TEXT     -- "high" (running), "low" (swimming/cycling)
-        )
-    ''')
-    
+    # 2. Master Exercise Library: created and filled by library.build() below
+
     # 3. Daily Logs & Symptom Tracking (Auto-Regulation)
     c.execute('''
         CREATE TABLE IF NOT EXISTS daily_logs (
@@ -53,6 +43,10 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # Merge the exercise databases (skipped when nothing changed since the last start)
+    import library
+    library.build(DB_PATH)
+
 def get_last_log():
     """Latest logged session: effort, symptoms and the workout that was done."""
     conn = sqlite3.connect(DB_PATH)
@@ -70,4 +64,4 @@ def get_last_log():
 
 if __name__ == "__main__":
     init_db()
-    print("Database expanded to support Triathlons, Snowboarding, and Symptom tracking.")
+    print("Database ready: goals, symptom tracking and exercise library.")
