@@ -83,6 +83,7 @@ function howTo(ex) {
   return `<div class="howto">
     ${ex.warning ? `<div class="warning">${esc(ex.warning)}</div>` : ""}
     ${pictures(ex.images, ex.image_note)}
+    ${ex.credit ? `<div class="small muted">${esc(ex.credit)}</div>` : ""}
     ${ex.gallery?.length > 2 ? `<div class="gallery">${ex.gallery.slice(2).map((u) => `<img src="${esc(u)}" alt="" loading="lazy">`).join("")}</div>` : ""}
     ${ex.dose ? `<div><strong>${esc(ex.dose)}</strong></div>` : ""}
     ${ex.steps?.length ? `<ol>${ex.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}

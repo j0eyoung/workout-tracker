@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2 - More Pictures
+
+### 🌟 Features
+* **All eight Baduanjin moves now have pictures** (photos by Alexander Callegari, CC BY-SA 3.0 de).
+* **Pictures for five more yoga poses** from freely licensed Wikimedia Commons photos: legs up the wall, reclined bound angle, knees to chest, happy baby and mountain pose. Each shows its photographer and licence under the picture. They are bundled in the add-on.
 ## 0.5.1 - Qigong Pictures
 
 ### 🌟 Features

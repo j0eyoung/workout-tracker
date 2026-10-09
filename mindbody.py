@@ -345,6 +345,17 @@ YOGA += [
 ]
 
 
+# Pictures for text-only poses, bundled in static/yoga-extra (free licences from Wikimedia Commons, resized)
+# slug -> (artist, licence, page)
+EXTRA_PHOTOS = {
+    "apanasana": ("Flora-Victoria", "CC0", "https://commons.wikimedia.org/wiki/File:Hatha_Yoga,_Pawanmuktasana,_Zhengzhou,_China.JPG"),
+    "ananda-balasana": ("Christy Collins", "CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File:IMG_0377_2_Happy_Baby.jpg"),
+    "viparita-karani": ("Shixart1985", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Woman_reading_a_book._Legs_up_the_wall_pose.jpg"),
+    "supta-baddha-konasana": ("Trollderella (cropped by Ludmiła Pilecka)", "CC BY-SA 2.0", "https://commons.wikimedia.org/wiki/File:Supta_baddha_konasana_variation.jpg"),
+    "tadasana": ("Kennguru", "CC BY 3.0", "https://commons.wikimedia.org/wiki/File:Tadasana_Yoga-Asana_Nina-Mel.jpg"),
+}
+
+
 def media_base():
     """Where the page loads yoga pictures from: this add-on (private B2 bucket) or a public address from Settings.
     The relative path keeps working behind Home Assistant ingress."""
@@ -358,14 +369,22 @@ def _yoga_card(p):
     base = media_base()
     n = PHOTOS.get(p["slug"], 0)
     images = [f"{base}/{p['slug']}-{i}.jpg" for i in range(1, n + 1)] if base else []
+    credit = None
+    extra = EXTRA_PHOTOS.get(p["slug"])
+    if extra and not images:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "yoga-extra", f"{p['slug']}.jpg")
+        if os.path.exists(path):
+            images = [f"static/yoga-extra/{p['slug']}.jpg"]
+            credit = f"Photo: {extra[0]}, {extra[1]}, via Wikimedia Commons (resized)"
     unsafe = p["unsafe"]
     warning = _WHY[unsafe] if unsafe else p["caution"]
     return {
         "name": f"{p['english']} ({p['sanskrit']})", "dose": p["dose"], "sets": 1, "why": None,
-        "images": images[:2], "gallery": images, "image_note": None,
+        "images": images[:2], "gallery": images if not credit else [], "image_note": None,
         "steps": p["steps"] + [BREATH], "tips": [p["tip"]], "safe": not unsafe, "warning": warning,
         "muscles": p["muscles"], "equipment": "bodyweight", "level": p["level"],
-        "sources": ["Yoga", PHOTO_SOURCE] if images else ["Yoga"], "category": p["cat"], "cooldown": bool(p["cool"]) and not unsafe,
+        "sources": ["Yoga", PHOTO_SOURCE] if images and not credit else ["Yoga"], "credit": credit,
+        "category": p["cat"], "cooldown": bool(p["cool"]) and not unsafe,
     }
 
 
@@ -421,6 +440,7 @@ _QIGONG_NOTES = {
     4: "The picture shows the traditional full turn. Your version turns the head only, hips and chest facing forward.",
     5: "The picture shows a deep side bend. Your version is a small, loose sway only.",
     6: "The picture shows the full fold. Fold only as far as is comfortable, and skip any backward arch.",
+    8: "The picture shows the standing posture around the move. The movement itself is a slow rise onto your toes and a soft lowering.",
 }
 
 
