@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4 - Suggested Weights and Reps
+
+### 🌟 Features
+* **Each exercise card shows what you did last time and what to try today,** and the set rows are pre-filled with it. Small steps only: a rep or two at a time, and weight goes up (2.5 lb under 20 lb, otherwise 5 lb) only once you reach 12 reps, then you start back at 8.
+* **It holds back when your body says so:** no increase after a hard session (effort 8 or more), or when your last kidney score was above 3 or pelvic floor above 6. Bodyweight moves progress a little faster.
+* **Build+ weeks add two reps, and the Easy week backs off** to last time's load with one set fewer.
+* Exercises you have never logged show no suggestion, so the first time is your own call.
 ## 0.4.3 - Five Strength Days With Core Activation Every Day
 
 ### 🌟 Features

@@ -24,13 +24,14 @@ import mindbody
 import ninjas_sync
 import planedit
 import planner
+import progression
 import tts
 from db import DB_PATH, get_last_log
 from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.4.3"
+VERSION = "0.4.4"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -131,6 +132,14 @@ def index():
     return FileResponse(os.path.join(HERE, "static", "index.html"), headers={"Cache-Control": "no-cache"})
 
 
+def with_progress(card, last, phase):
+    """Adds last time's sets and a suggested weight and reps to an exercise card."""
+    date, sets = history.last_session(DB_PATH, card["name"])
+    card["progress"] = progression.suggest(date, sets, phase, last.get("rpe"), last.get("kidney_flank_pain"),
+                                           last.get("pelvic_floor_tightness"))
+    return card
+
+
 @app.get("/api/plan")
 def plan():
     today = history.local_today()
@@ -139,12 +148,14 @@ def plan():
     draft = history.load_draft(DB_PATH, today) or {}
     last = get_last_log()
     kidney, pf = last.get("kidney_flank_pain"), last.get("pelvic_floor_tightness")
+    phase = planner.phase(datetime.date.fromisoformat(today))
     return {
+        "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
         "cooldown": {"note": mindbody.cooldown_note(kidney, pf), "cards": mindbody.cooldown(kidney, pf)},
         "date": today,
         "warmup": [how_to(n) for n in w["warmup"]],
-        "strength": [how_to(n, why.get(n)) for n in w["strength"]],
+        "strength": [with_progress(how_to(n, why.get(n)), last, phase) for n in w["strength"]],
         "cardio": {"text": w["cardio"], "minutes": w.get("cardio_minutes"), "note": w.get("cardio_note"),
                    "type": w.get("cardio_type"), "images": CARDIO_IMAGES.get(w.get("cardio_type"), [])},
         "draft": {"tracker": [_page_row(r) for r in draft.get("tracker", [])], "checks": draft.get("checks", {})},

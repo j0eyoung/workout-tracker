@@ -133,6 +133,19 @@ def exercise_progress(db_path, exercise):
     return [{"date": d, "top_weight_lbs": w or 0, "total_reps": r or 0, "sets_done": s or 0} for d, w, r, s in rows]
 
 
+def last_session(db_path, exercise):
+    """Sets done in the most recent session of an exercise: (date, [{weight, reps}]). (None, []) if never done."""
+    conn = sqlite3.connect(db_path)
+    row = conn.execute("SELECT MAX(date) FROM workout_sets WHERE exercise = ? AND done = 1", (exercise,)).fetchone()
+    if not row or not row[0]:
+        conn.close()
+        return None, []
+    rows = conn.execute("SELECT weight_lbs, reps FROM workout_sets WHERE exercise = ? AND date = ? AND done = 1 "
+                        "ORDER BY set_number", (exercise, row[0])).fetchall()
+    conn.close()
+    return row[0], [{"weight": w, "reps": r} for w, r in rows]
+
+
 def logged_exercises(db_path):
     conn = sqlite3.connect(db_path)
     names = [r[0] for r in conn.execute(

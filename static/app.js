@@ -113,7 +113,10 @@ function loadPlan(plan) {
   }
   for (const ex of plan.strength) {
     if (!state.sets[ex.name]) {
-      state.sets[ex.name] = Array.from({ length: ex.sets || 3 }, () => ({ weight: "", reps: "", done: false }));
+      // Pre-fill today's suggested weight and reps; an easy week has one set fewer
+      const p = ex.progress;
+      const count = Math.max(1, (ex.sets || 3) + (p?.sets_delta || 0));
+      state.sets[ex.name] = Array.from({ length: count }, () => ({ weight: p?.weight ?? "", reps: p?.reps ?? "", done: false }));
     }
   }
   state.extras = Object.keys(state.sets).filter((n) => !plan.strength.some((e) => e.name === n));
@@ -175,6 +178,8 @@ function strengthCard(ex) {
     <h3>${esc(ex.name)}</h3>
     <div class="sub">${esc(ex.dose || "Your own exercise")}${sets.length ? ` · ${done}/${plural(sets.length, "set")} done` : ""}</div>
     ${ex.why ? `<div class="why">${esc(ex.why)}</div>` : ""}
+    ${ex.progress ? `<div class="progress"><span class="muted">Last time (${esc(formatDate(ex.progress.date))}):</span> ${esc(ex.progress.last)}<br>
+      <strong>${esc(ex.progress.note)}</strong></div>` : ""}
     ${hasHowTo(ex) ? toggleButton(key) + (state.open.has(key) ? howTo(ex) : "") : ""}
     <div class="sets">${sets.map((s, i) => setRow(ex.name, s, i)).join("")}</div>
     <div class="row-actions"><button type="button" class="btn small" data-act="add-set" data-name="${esc(ex.name)}">+ Add set</button></div>

@@ -170,6 +170,7 @@ pre.notes { white-space: pre-wrap; font: inherit; font-size: 0.88rem; color: var
 .week-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .week-day.today { border-color: var(--accent); }
 .week-day.done { opacity: 0.75; }
+.progress { font-size: 0.88rem; margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: var(--card-2); }
 .chips.wrap { flex-wrap: wrap; overflow: visible; }
 .chip.on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
