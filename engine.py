@@ -43,14 +43,19 @@ def accessory_slots(goals):
 
 # Muscle-group themes from the weekly plan: each strength day works a different group, and the groups rotate each week.
 THEME_SLOTS = {
-    "legs": [("legs", "Quads and glutes"), ("legs", "Single-leg and hip strength"), ("core", "Core control")],
-    "back": [("upper back", "Upper back and posture"), ("upper back", "Pulling strength"), ("core", "Core control"),
-             ("mobility", "Chest and spine mobility")],
-    "hips": [("balance", "Balance and ankle control"), ("legs", "Glutes and hips"), ("core", "Core control"),
-             ("mobility", "Hip mobility")],
+    # Core activation is where Joe's body struggles most, so every strength day has two core slots
+    "legs": [("legs", "Quads and glutes"), ("legs", "Single-leg and hip strength"), ("core", "Core activation"),
+             ("core", "Core stability")],
+    "back": [("upper back", "Upper back and posture"), ("upper back", "Pulling strength"), ("core", "Core activation"),
+             ("core", "Core stability"), ("mobility", "Chest and spine mobility")],
+    "hips": [("balance", "Balance and ankle control"), ("legs", "Glutes and hips"), ("core", "Core activation"),
+             ("core", "Core stability"), ("mobility", "Hip mobility")],
+    "core": [("core", "Core activation"), ("core", "Deep core control"), ("core", "Core stability"),
+             ("mobility", "Rib and pelvic mobility")],
+    "full": [("legs", "Legs"), ("upper back", "Upper back"), ("core", "Core activation"), ("core", "Core stability")],
 }
 # Cardio days add one short piece of work for a group that isn't trained that day
-CARDIO_THEME_SLOTS = {"core": [("core", "Core")], "mobility": [("mobility", "Hip and spine mobility")]}
+CARDIO_THEME_SLOTS = {"core_add": [("core", "Core activation")], "mobility": [("mobility", "Hip and spine mobility")]}
 
 
 def theme_slots(theme, goals):

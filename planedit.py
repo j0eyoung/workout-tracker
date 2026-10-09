@@ -23,7 +23,7 @@ INSTRUCTIONS = (
     '{"op": "cardio", "type": "bike", "minutes": 25, "why": "short reason"}]}\n```\n'
     'To change a day in the weekly plan use {"op": "day", "date": "YYYY-MM-DD", "focus": "strength|cardio|recovery|rest", '
     '"type": "swim|bike|run|walk", "minutes": 30, "why": "short reason"} (type and minutes only for cardio days; dates from today '
-    "to 13 days ahead; each week keeps at least one rest or recovery day and at most 4 strength days). "
+    "to 13 days ahead; each week keeps at least one rest or recovery day and at most 5 strength days). "
     "Rules: at most 6 changes; exercise names must come from today's plan or the SAFE EXERCISES list below, spelled exactly; "
     "cardio type is one of recovery, swim, bike, run, walk; on a recovery day change nothing except adding gentle mobility; "
     "never raise cardio by more than 10 minutes. Explain the reason in your reply too. If you do not want to change the plan, "
@@ -112,8 +112,7 @@ def validate(data, plan, by_name, equipment):
 
 def validate_days(ops, today, goals):
     """Week-plan changes: {"op": "day", "date": "2026-10-10", "focus": "rest"|"recovery"|"strength"|"cardio", ...}.
-    Allowed for today and the next 13 days; every week must keep at least one rest or recovery day and at most 4
-    strength days, and cardio stays within 5-45 minutes."""
+    Allowed for today and the next 13 days; every week must keep at least one rest or recovery day and at most 5$([char]10)    strength days, and cardio stays within 5-45 minutes."""
     import planner
     allowed, rejected = [], []
     focus_by_date = {}
@@ -143,15 +142,15 @@ def validate_days(ops, today, goals):
                 entry.update(type=ctype, minutes=minutes)
             allowed.append(entry)
             focus_by_date[d] = focus
-    # every affected week keeps at least one rest/recovery day and no more than 4 strength days
+    # every affected week keeps at least one rest/recovery day and no more than 5 strength days
     weeks = {planner.monday(d) for d in focus_by_date}
     for start in weeks:
         days = [start + datetime.timedelta(days=i) for i in range(7)]
         focuses = [focus_by_date.get(d) or planner.day_plan(d, goals)["focus"] for d in days]
-        if not any(f in ("rest", "recovery") for f in focuses) or focuses.count("strength") > 4:
+        if not any(f in ("rest", "recovery") for f in focuses) or focuses.count("strength") > planner.MAX_STRENGTH_DAYS:
             bad = {d for d in focus_by_date if planner.monday(d) == start}
             allowed = [c for c in allowed if datetime.date.fromisoformat(c["date"]) not in bad]
-            rejected.append(f"The week of {start:%b %d} needs at least one rest or recovery day and at most 4 strength days.")
+            rejected.append(f"The week of {start:%b %d} needs at least one rest or recovery day and at most 5 strength days.")
     return allowed, rejected
 
 

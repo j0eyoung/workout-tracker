@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.3 - Five Strength Days With Core Activation Every Day
+
+### 🌟 Features
+* **Five strength days a week** (Mon, Tue, Thu, Fri, Sat) with Wednesday as the cardio day and Sunday as rest. The coach can still move days around, now up to 5 strength days a week with at least one rest or recovery day.
+* **Core activation on every strength day:** each one has two core slots (activation and stability), and a dedicated **core activation day** joins the rotation. Cardio days add a short core or mobility piece too.
+* The five groups (legs, back and posture, core activation, hips and balance, full body and core) rotate across the week and shift every week, so a weekday is never the same twice in a row.
 ## 0.4.2 - A Different Muscle Group Every Day, A Different Week Every Week
 
 ### 🌟 Features

@@ -13,8 +13,10 @@ DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 KEEP_DAYS = 28
 
 # weekday -> (focus, cardio slot). Slots: a = main cardio, b = second cardio, long = long easy day
-PATTERN = {0: ("strength", None), 1: ("cardio", "a"), 2: ("strength", None), 3: ("cardio", "b"),
-           4: ("strength", None), 5: ("cardio", "long"), 6: ("rest", None)}
+PATTERN = {0: ("strength", None), 1: ("strength", None), 2: ("cardio", "a"), 3: ("strength", None),
+           4: ("strength", None), 5: ("strength", None), 6: ("rest", None)}
+MAX_STRENGTH_DAYS = 5
+STRENGTH_WEEKDAYS = [0, 1, 3, 4, 5]
 
 
 def monday(date):
@@ -28,9 +30,10 @@ def _cardio_type(slot, goals):
 
 
 # Each strength day works a different group, and the groups shift every week so no weekday is always the same.
-THEMES = ["legs", "back", "hips"]
+THEMES = ["legs", "back", "core", "hips", "full"]
 THEME_LABELS = {"legs": "Legs: quads and glutes", "back": "Back and posture", "hips": "Hips and balance",
-                "core": "plus core", "mobility": "plus hip and spine mobility"}
+                "core": "Core activation day", "full": "Full body and core",
+                "core_add": "plus core", "mobility": "plus hip and spine mobility"}
 PHASES = ["Base", "Build", "Build+", "Easy week"]  # 4-week cycle; the easy week trims the extras
 
 
@@ -44,9 +47,11 @@ def phase(date):
 
 def theme_for(date, focus):
     if focus == "strength":
-        return THEMES[(date.weekday() + week_number(date)) % 3]
+        # position among the week's strength days, shifted each week so a weekday is not always the same group
+        pos = STRENGTH_WEEKDAYS.index(date.weekday()) if date.weekday() in STRENGTH_WEEKDAYS else date.weekday() % 5
+        return THEMES[(pos + week_number(date)) % len(THEMES)]
     if focus == "cardio":
-        return "core" if (date.weekday() // 2 + week_number(date)) % 2 == 0 else "mobility"
+        return "core_add" if (date.weekday() // 2 + week_number(date)) % 2 == 0 else "mobility"
     return None
 
 
