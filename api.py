@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import coach
+import garmin_sync
 import history
 import library
 import media
@@ -31,7 +32,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.4.7"
+VERSION = "0.5.0"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -306,6 +307,53 @@ def reset_week():
 def reset_changes():
     planedit.clear(history.local_today())
     return {"ok": True}
+
+
+@app.on_event("startup")
+def _start_garmin_sync():
+    garmin_sync.start_background(history.local_today)
+
+
+@app.get("/api/garmin")
+def garmin_state():
+    return garmin_sync.status()
+
+
+class GarminLogin(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/garmin/connect")
+def garmin_connect(g: GarminLogin):
+    result = garmin_sync.connect(g.email, g.password)
+    if result["ok"] and not result["needs_mfa"]:
+        garmin_sync.sync(datetime.date.fromisoformat(history.local_today()))
+    return {**result, **garmin_sync.status()}
+
+
+class GarminCode(BaseModel):
+    code: str
+
+
+@app.post("/api/garmin/mfa")
+def garmin_mfa(c: GarminCode):
+    result = garmin_sync.submit_mfa(c.code)
+    if result["ok"]:
+        garmin_sync.sync(datetime.date.fromisoformat(history.local_today()))
+    return {**result, **garmin_sync.status()}
+
+
+@app.post("/api/garmin/sync")
+def garmin_sync_now():
+    ok, message = garmin_sync.sync(datetime.date.fromisoformat(history.local_today()))
+    return {"ok": ok, "message": message, **garmin_sync.status()}
+
+
+@app.post("/api/garmin/disconnect")
+def garmin_disconnect():
+    garmin_sync.disconnect()
+    return garmin_sync.status()
 
 
 @app.post("/api/media/test")

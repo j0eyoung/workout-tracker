@@ -70,8 +70,10 @@ def training_data(days=21):
                         "WHERE date >= ? ORDER BY id DESC LIMIT 30", (since,))
     sets = _table(conn, "SELECT date, exercise, set_number, weight_lbs, reps FROM workout_sets WHERE date >= ? AND done = 1 "
                         "ORDER BY id DESC LIMIT 150", (since,))
-    garmin = _table(conn, "SELECT date, resting_hr, latest_activity_type, duration_secs, avg_hr, max_hr FROM garmin_metrics "
-                          "ORDER BY id DESC LIMIT 14")
+    garmin = (_table(conn, "SELECT date, resting_hr, hrv_avg, sleep_secs, body_battery, latest_activity_type, duration_secs, "
+                           "avg_hr, max_hr FROM garmin_metrics ORDER BY id DESC LIMIT 14")
+              or _table(conn, "SELECT date, resting_hr, latest_activity_type, duration_secs, avg_hr, max_hr FROM garmin_metrics "
+                              "ORDER BY id DESC LIMIT 14"))  # older databases have no hrv/sleep columns
     conn.close()
 
     def section(title, rows, empty):

@@ -58,6 +58,7 @@ const state = {
   coachBusy: false,
   mind: null, mindFilter: "all", mindQ: "",
   week: null, weekOffset: 0, coachDraft: "",
+  garmin: null, garminMsg: "",
   voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
   lib: { q: "", focus: "", muscle: "", equipment: "", pictures: true, filtered: false, data: null, results: [], offset: 0 },
@@ -494,7 +495,36 @@ async function sendCoach() {
 // --- Settings ---------------------------------------------------------------------------------
 // One tab for everything you can change. New sections (sports, training goals) go in as more cards.
 
+function garminCard() {
+  const g = state.garmin;
+  if (!g) return `<div class="card muted">Checking Garmin…</div>`;
+  const msg = state.garminMsg ? `<div class="small" style="margin-top:8px">${esc(state.garminMsg)}</div>` : "";
+  if (g.connected) {
+    return `<div class="card"><h3>Garmin connected</h3>
+      <p class="sub">${g.last ? `Last sync ${esc(formatDate(g.last.date))}${g.last.resting_hr ? ` · resting heart rate ${esc(g.last.resting_hr)}` : ""}` : "No data yet. Tap Sync now."}.
+        The coach reads resting heart rate, HRV, sleep and your latest activity. It syncs every few hours.</p>
+      <div class="row-actions"><button type="button" class="btn small" data-act="garmin-sync">Sync now</button>
+        <button type="button" class="btn small" data-act="garmin-disconnect">Disconnect</button></div>${msg}</div>`;
+  }
+  if (g.needs_mfa) {
+    return `<div class="card"><h3>Enter the Garmin code</h3><p class="sub">Garmin sent a verification code to your email or phone.</p>
+      <div class="composer" style="position:static;padding:0"><input id="garmin-code" class="code-input" inputmode="numeric" autocomplete="one-time-code" placeholder="Code">
+      <button type="button" class="btn primary" style="width:auto" data-act="garmin-mfa">Verify</button></div>${msg}</div>`;
+  }
+  return `<div class="card"><h3>Connect Garmin</h3>
+    <p class="sub">Your password is used once to sign in and is not saved. Only a login token stays on your Home Assistant.</p>
+    <input id="garmin-email" type="email" class="code-input" style="width:100%;margin-bottom:8px" placeholder="Garmin email" autocomplete="username">
+    <input id="garmin-pass" type="password" class="code-input" style="width:100%" placeholder="Garmin password" autocomplete="current-password">
+    <div class="row-actions"><button type="button" class="btn primary" style="width:auto" data-act="garmin-connect">Connect Garmin</button></div>${msg}</div>`;
+}
+
+async function loadGarmin() {
+  try { state.garmin = await api("api/garmin"); } catch { state.garmin = { connected: false }; }
+  if (state.tab === "settings" && !document.activeElement?.matches?.("input, textarea")) render();
+}
+
 async function renderSettings() {
+  if (!state.garmin) loadGarmin();
   if (!state.claude) loadClaude();
   if (!state.settings) state.settings = await api("api/settings");
   const s = state.settings;
@@ -532,6 +562,8 @@ async function renderSettings() {
       <input type="url" id="media-url" class="code-input" style="width:100%" value="${esc(s.media_base_url)}" placeholder="https://…/workout/yoga">
       <div class="row-actions"><button type="button" class="btn small" data-act="save-media">Save</button></div>
     </div>`}
+    <h2>Garmin</h2>
+    ${garminCard()}
     <h2>AI Coach</h2>
     ${c && c.signed_in
       ? `<div class="card"><h3>Claude connected</h3><p class="sub">The coach uses your Claude subscription.</p>
@@ -857,6 +889,44 @@ const actions = {
     if (state.medScript && !state.medError) startAudio(state.medScript);
   },
   "goto-settings"() { history.replaceState(null, "", "#settings"); showTab("settings"); },
+  async "garmin-connect"(el) {
+    const email = document.getElementById("garmin-email").value.trim();
+    const password = document.getElementById("garmin-pass").value;
+    if (!email || !password) { state.garminMsg = "Enter your Garmin email and password."; renderSettings(); return; }
+    el.disabled = true; el.textContent = "Connecting…";
+    try {
+      const r = await api("api/garmin/connect", { method: "POST", body: JSON.stringify({ email, password }) });
+      state.garmin = r;
+      state.garminMsg = r.error || (r.needs_mfa ? "" : "Connected.");
+    } catch { state.garminMsg = "Couldn't reach the add-on."; }
+    renderSettings();
+  },
+  async "garmin-mfa"(el) {
+    const code = document.getElementById("garmin-code").value.trim();
+    if (!code) return;
+    el.disabled = true;
+    try {
+      const r = await api("api/garmin/mfa", { method: "POST", body: JSON.stringify({ code }) });
+      state.garmin = r;
+      state.garminMsg = r.error || "Connected.";
+    } catch { state.garminMsg = "Couldn't reach the add-on."; }
+    renderSettings();
+  },
+  async "garmin-sync"(el) {
+    el.disabled = true; el.textContent = "Syncing…";
+    try {
+      const r = await api("api/garmin/sync", { method: "POST" });
+      state.garmin = r;
+      state.garminMsg = r.message;
+    } catch { state.garminMsg = "Couldn't reach the add-on."; }
+    renderSettings();
+  },
+  async "garmin-disconnect"() {
+    if (!confirm("Disconnect Garmin? Saved Garmin numbers stay, but nothing new will sync.")) return;
+    state.garmin = await api("api/garmin/disconnect", { method: "POST" });
+    state.garminMsg = "";
+    renderSettings();
+  },
   async "media-test"(el) {
     el.disabled = true;
     el.textContent = "Testing…";

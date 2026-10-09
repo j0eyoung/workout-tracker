@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 - Garmin Connected From Inside the App
+
+### 🌟 Features
+* **Connect Garmin in Settings.** Enter your Garmin email and password once (and the verification code if Garmin asks for one). The password is used only for the sign-in and is never saved; only a login token is kept on your Home Assistant, and it refreshes itself.
+* **Automatic sync every few hours** of resting heart rate, HRV, last night's sleep, body battery and your latest activity. "Sync now" does it on demand.
+* **The coach uses it.** It now sees your Garmin numbers alongside your logged effort and symptoms. If Garmin isn't connected it says so instead of guessing.
+
+### 🔧 Changes
+* Fixed the old sync reading the wrong field for resting heart rate (it always stored 0).
 ## 0.4.7 - Picture Test Tries Several Files
 
 ### 🔧 Changes
