@@ -30,7 +30,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -226,7 +226,7 @@ def ask_coach(m: CoachMessage):
     context = "\n\n".join([planedit.INSTRUCTIONS, planedit.context(plan, lib["entries"], library.selected_equipment(), selected_sports()),
                            planedit.week_context(today, selected_sports())])
     reply, error = coach.ask(m.message, m.recent, plan_context=context,
-                             season=library.load_settings().get("season_start", ""))
+                             season=library.load_settings().get("season_start", ""), sports=selected_sports())
     reply, data = planedit.extract(reply)
     ops = (data or {}).get("changes") or []
     changes, rejected = planedit.validate({"changes": [c for c in ops if c.get("op") != "day"]}, plan, lib["by_name"],

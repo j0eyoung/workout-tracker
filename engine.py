@@ -10,9 +10,9 @@ PROGRESSION_DAYS = 7
 
 CARDIO_TEXT = {
     "recovery": "Recovery: light walking or easy swimming (no running or biking)",
-    "swim": "Triathlon Prep: Swimming. Easy laps, or 10 x 50 m with 30 s rest. Symmetrical breathing, avoid aggressive torso rotation",
-    "bike": "Triathlon Prep: Cycling at low resistance and high cadence (85-95 rpm). Or swap for a backwards incline walk of the same length",
-    "run": "Triathlon Prep: Running in Zone 2, high cadence to minimize ground reaction force. If your heart rate drifts above Zone 2, alternate 2 min running / 1 min walking",
+    "swim": "Swimming. Easy laps, or 10 x 50 m with 30 s rest. Symmetrical breathing, avoid aggressive torso rotation",
+    "bike": "Cycling at low resistance and high cadence (85-95 rpm). Or swap for a backwards incline walk of the same length",
+    "run": "Running in Zone 2, high cadence to minimize ground reaction force. If your heart rate drifts above Zone 2, alternate 2 min running / 1 min walking",
     "walk": "Treadmill incline walk",
 }
 
@@ -142,13 +142,20 @@ class WorkoutEngine:
     def _set_cardio(self, workout_plan, cardio_type, rpe, kidney_pain, last_workout, today):
         minutes, progressed_on, note = self._cardio_minutes(cardio_type, rpe, kidney_pain, last_workout, today)
         workout_plan["cardio"] = (
-            f"{minutes} min: {CARDIO_TEXT[cardio_type]}. "
+            f"{minutes} min: {self._cardio_label(cardio_type)}. "
             "Easy pace (you can talk in full sentences); the first 5 min are your warm-up."
         )
         workout_plan["cardio_type"] = cardio_type
         workout_plan["cardio_minutes"] = minutes
         workout_plan["cardio_progressed_on"] = progressed_on
         workout_plan["cardio_note"] = note
+
+    def _cardio_label(self, cardio_type):
+        """Cardio description; only called Triathlon Prep when triathlon is one of your sports."""
+        text = CARDIO_TEXT[cardio_type]
+        if "triathlon" in getattr(self, "goals", []) and cardio_type in ("swim", "bike", "run"):
+            text = "Triathlon Prep: " + text
+        return text
 
     def _cardio_minutes(self, cardio_type, rpe, kidney_pain, last_workout, today):
         """Returns (minutes, date the minutes last changed, why) based on the last logged session."""

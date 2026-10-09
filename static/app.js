@@ -816,6 +816,7 @@ const actions = {
   },
   complete(el) { completeWorkout(el); },
   send() { sendCoach(); },
+  goto(el) { history.replaceState(null, "", `#${el.dataset.v}`); showTab(el.dataset.v); },
   "week-nav"(el) { state.weekOffset = Number(el.dataset.v); render(); },
   "week-ask"() {
     state.coachDraft = "Look at my week and suggest any changes, thinking about my sports and how I've been feeling.";
@@ -1006,13 +1007,23 @@ document.addEventListener("visibilitychange", () => {
 // --- Tabs -------------------------------------------------------------------------------------
 
 function render() {
-  const views = { today: renderToday, week: renderWeek, history: renderHistory, coach: renderCoach, library: renderLibrary, mind: renderMindBody, settings: renderSettings };
+  const views = { more: renderMore, today: renderToday, week: renderWeek, history: renderHistory, coach: renderCoach, library: renderLibrary, mind: renderMindBody, settings: renderSettings };
   Promise.resolve(views[state.tab]()).catch(() => {
     $view.innerHTML = `<div class="empty">Couldn't load this page. Pull down to refresh or try again.</div>`;
   });
 }
 
-const TAB_ORDER = ["today", "week", "history", "coach", "library", "mind", "settings"];
+// Swipe order. The bottom bar shows five; History, Library and Settings live under More.
+const TAB_ORDER = ["today", "week", "coach", "mind", "history", "library", "settings"];
+const MORE_TABS = ["history", "library", "settings"];
+const VALID_TABS = [...TAB_ORDER, "more"];
+
+function renderMore() {
+  const items = [["history", "🗓️", "History", "Past workouts and progress charts"], ["library", "📚", "Library", "Search the exercise library"],
+    ["settings", "⚙️", "Settings", "Sports, equipment, voice and Claude connection"]];
+  $view.innerHTML = items.map(([tab, icon, name, sub]) => `<button type="button" class="card more-item" data-act="goto" data-v="${tab}">
+      <span class="more-icon" aria-hidden="true">${icon}</span><span><strong>${name}</strong><span class="sub" style="display:block">${sub}</span></span></button>`).join("");
+}
 
 // Swipe left/right anywhere on the page to move between tabs (ignored on sliders, text boxes, audio and sideways-scrolling strips)
 let swipe = null;
@@ -1027,16 +1038,18 @@ document.addEventListener("touchend", (e) => {
   const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, quick = Date.now() - swipe.t < 700;
   swipe = null;
   if (!quick || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
-  const i = TAB_ORDER.indexOf(state.tab) + (dx < 0 ? 1 : -1);
-  if (i < 0 || i >= TAB_ORDER.length) return;
+  const here = TAB_ORDER.indexOf(state.tab);
+  const i = here + (dx < 0 ? 1 : -1);
+  if (here < 0 || i < 0 || i >= TAB_ORDER.length) return;
   history.replaceState(null, "", `#${TAB_ORDER[i]}`);
   showTab(TAB_ORDER[i]);
 }, { passive: true });
 
 function showTab(tab) {
-  if (!TAB_ORDER.includes(tab)) tab = "today";
+  if (!VALID_TABS.includes(tab)) tab = "today";
   state.tab = tab;
-  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  const highlight = MORE_TABS.includes(tab) ? "more" : tab;
+  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === highlight));
   if (tab === "history") state.history = null;   // always fresh
   render();
   window.scrollTo({ top: 0 });

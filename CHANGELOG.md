@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1 - Roomier Tab Bar and Sports-Aware Coach
+
+### 🌟 Features
+* **Five tabs instead of seven:** Today, Week, Coach, Mind & Body and **More**. More opens a short menu for History, Library and Settings. Swiping still moves through every screen.
+
+### 🔧 Changes
+* **Untick Triathlon in Settings > Sports and it really goes away:** the coach no longer introduces itself as a triathlon coach, and cardio descriptions no longer start with "Triathlon Prep". The coach is now told which sports you are training for and sticks to them.
 ## 0.4.0 - Weekly Plan and Swipe Navigation
 
 ### 🌟 Features

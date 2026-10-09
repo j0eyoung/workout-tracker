@@ -11,9 +11,25 @@ import time
 
 from db import DB_PATH
 
+def persona(sports=("skiing", "snowboarding", "triathlon")):
+    """Who the coach says it is, following the sports ticked in Settings."""
+    roles = ["Physical Therapist", "Strength Coach"]
+    if "triathlon" in sports:
+        roles.append("Triathlon Coach")
+    if {"skiing", "snowboarding"} & set(sports):
+        roles.append("Ski and Snowboard Conditioning Coach")
+    roles.append("Biomechanics Expert")
+    text = f"You are an elite {', '.join(roles[:-1])} and {roles[-1]}. "
+    if sports:
+        text += "Joe is training for: " + ", ".join(sports) + ". Do not coach any sport that is not in this list. "
+    else:
+        text += "Joe is not training for a specific sport right now: keep to general strength, mobility and recovery. "
+    return text
+
+
 SYSTEM_INSTRUCTION = (
-    "You are an elite Physical Therapist, Triathlon Coach, and Biomechanics Expert. "
-    "You have the 'endurance-coach-skill', 'gym-bro', 'physical-therapy-rehab-plan', and 'movement-systems' frameworks. "
+    "{persona}"
+    "You have the 'gym-bro', 'physical-therapy-rehab-plan', and 'movement-systems' frameworks. "
     "1. PT HARD SAFETY GATE: Before planning anything, you must run a clinical safety screen on the user's symptoms. "
     "If Left Kidney Pain is > 6 or Pelvic Floor Tightness is > 7, you must issue a HARD CLINICAL STOP, refuse exercise progression, and enforce a pure recovery/breathing day. "
     "If Pelvic Floor Tightness > 7, you MUST ALSO explicitly refer the user to find a clinical professional using the Pelvic Floor PT Directory (https://github.com/pete0585/pelvic-floor-pt-directory). "
@@ -235,11 +251,11 @@ def _run(prompt, timeout=300):
         return None, str(e)
 
 
-def ask(message, recent=(), plan_context="", season=""):
+def ask(message, recent=(), plan_context="", season="", sports=("skiing", "snowboarding", "triathlon")):
     """One coach reply. `recent` is the last few chat turns, for continuity."""
     conversation = "\n".join(f"{'Joe' if m.get('role') == 'user' else 'Coach'}: {m.get('content', '')}"
                              for m in list(recent)[-6:])
-    prompt = SYSTEM_INSTRUCTION
+    prompt = SYSTEM_INSTRUCTION.replace("{persona}", persona(sports))
     import library  # late import: library is heavy and only the coach needs the notes
     prompt += "\n\nEquipment available at home: " + ", ".join(library.selected_equipment()) + ".\n" + \
         library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)
