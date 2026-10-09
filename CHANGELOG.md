@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 - Weekly Plan and Swipe Navigation
+
+### 🌟 Features
+* **Week tab:** see the whole week at a glance, Monday to Sunday, with next week one tap away. Each day shows what it is for (strength, cardio, recovery or rest), the cardio type, the exercises, a mind-body suggestion, and whether you did it. The default week is strength, cardio, strength, cardio, strength, a long easy cardio day, and a rest day. With Triathlon on, cardio rotates swim, run and bike.
+* **Today follows the week.** Rest and recovery days turn into gentle recovery days, cardio days keep the strength part short, and the planned cardio type is used when it is safe for your pelvic floor score. A high kidney score still forces a recovery day, whatever the week says.
+* **The coach can plan your week.** Ask it to adjust the week (there is a button on the Week tab) and it suggests changes to specific days. You approve with **Apply**. Every week keeps at least one rest or recovery day and at most 4 strength days, and cardio stays between 5 and 45 minutes.
+* **Swipe left and right** to move between tabs. It is ignored on sliders, text boxes, audio players and sideways-scrolling strips so it never gets in the way.
+* Weeks to snow season show on the Week tab when you set the season date in Settings.
+
+### 🔧 Changes
+* The bottom tab "Mind & Body" is now "Mind" to make room for the Week tab.
 ## 0.3.6 - Sports and a Coach That Can Change Your Plan
 
 ### 🌟 Features

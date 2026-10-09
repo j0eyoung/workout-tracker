@@ -3,6 +3,7 @@
 The coach (a headless Claude CLI that cannot run tools) may end a reply with a fenced `plan-changes` block. The app
 never trusts it: every change is checked here against the exercise library and the safety rules, shown to Joe as
 Apply / No thanks, and only then saved for that day. Recovery days (kidney flank above 5) stay recovery days."""
+import datetime
 import difflib
 import json
 import re
@@ -20,6 +21,9 @@ INSTRUCTIONS = (
     '```plan-changes\n{"changes": [{"op": "add", "name": "Exercise name", "why": "short reason"}, '
     '{"op": "remove", "name": "Exercise name in today\'s plan"}, '
     '{"op": "cardio", "type": "bike", "minutes": 25, "why": "short reason"}]}\n```\n'
+    'To change a day in the weekly plan use {"op": "day", "date": "YYYY-MM-DD", "focus": "strength|cardio|recovery|rest", '
+    '"type": "swim|bike|run|walk", "minutes": 30, "why": "short reason"} (type and minutes only for cardio days; dates from today '
+    "to 13 days ahead; each week keeps at least one rest or recovery day and at most 4 strength days). "
     "Rules: at most 6 changes; exercise names must come from today's plan or the SAFE EXERCISES list below, spelled exactly; "
     "cardio type is one of recovery, swim, bike, run, walk; on a recovery day change nothing except adding gentle mobility; "
     "never raise cardio by more than 10 minutes. Explain the reason in your reply too. If you do not want to change the plan, "
@@ -106,7 +110,56 @@ def validate(data, plan, by_name, equipment):
     return allowed, rejected
 
 
+def validate_days(ops, today, goals):
+    """Week-plan changes: {"op": "day", "date": "2026-10-10", "focus": "rest"|"recovery"|"strength"|"cardio", ...}.
+    Allowed for today and the next 13 days; every week must keep at least one rest or recovery day and at most 4
+    strength days, and cardio stays within 5-45 minutes."""
+    import planner
+    allowed, rejected = [], []
+    focus_by_date = {}
+    for op in ops[:MAX_CHANGES]:
+        try:
+            d = datetime.date.fromisoformat(str(op.get("date")))
+        except ValueError:
+            rejected.append(f"'{op.get('date')}' isn't a date the week plan can change.")
+            continue
+        focus = op.get("focus")
+        if not 0 <= (d - today).days <= 13:
+            rejected.append(f"{d:%a %b %d} is outside the next two weeks.")
+        elif focus not in planner.FOCUS:
+            rejected.append(f"'{focus}' isn't a day type (strength, cardio, recovery or rest).")
+        else:
+            entry = {"op": "day", "date": d.isoformat(), "focus": focus, "why": str(op.get("why") or "")[:160]}
+            if focus == "cardio":
+                ctype = op.get("type") or planner.day_plan(d, goals)["cardio_type"] or ("swim" if "triathlon" in goals else "walk")
+                try:
+                    minutes = int(op.get("minutes") or planner.day_plan(d, goals)["cardio_minutes"] or 20)
+                except (TypeError, ValueError):
+                    rejected.append("The cardio day didn't have a number of minutes.")
+                    continue
+                if ctype not in CARDIO_TEXT or ctype == "recovery" or not 5 <= minutes <= CARDIO_MAX_MINUTES:
+                    rejected.append(f"Cardio on {d:%a %b %d} needs a type (swim, bike, run, walk) and 5-{CARDIO_MAX_MINUTES} minutes.")
+                    continue
+                entry.update(type=ctype, minutes=minutes)
+            allowed.append(entry)
+            focus_by_date[d] = focus
+    # every affected week keeps at least one rest/recovery day and no more than 4 strength days
+    weeks = {planner.monday(d) for d in focus_by_date}
+    for start in weeks:
+        days = [start + datetime.timedelta(days=i) for i in range(7)]
+        focuses = [focus_by_date.get(d) or planner.day_plan(d, goals)["focus"] for d in days]
+        if not any(f in ("rest", "recovery") for f in focuses) or focuses.count("strength") > 4:
+            bad = {d for d in focus_by_date if planner.monday(d) == start}
+            allowed = [c for c in allowed if datetime.date.fromisoformat(c["date"]) not in bad]
+            rejected.append(f"The week of {start:%b %d} needs at least one rest or recovery day and at most 4 strength days.")
+    return allowed, rejected
+
+
 def label(c):
+    if c["op"] == "day":
+        d = datetime.date.fromisoformat(c["date"])
+        extra = f" ({c['minutes']} min {c['type']})" if c["focus"] == "cardio" else ""
+        return f"{d:%a %b %d}: {c['focus']}{extra}"
     if c["op"] == "add":
         return f"Add {c['name']}"
     if c["op"] == "remove":
@@ -154,6 +207,18 @@ def apply(workout, changes):
 
 
 # --- What the coach is told -----------------------------------------------------------------------------------
+
+def week_context(today, goals):
+    import planner
+    lines = ["THIS WEEK AND NEXT (weekly plan; today is " + today.strftime("%a %Y-%m-%d") + "):"]
+    for start in (planner.monday(today), planner.monday(today) + datetime.timedelta(days=7)):
+        for i in range(7):
+            d = start + datetime.timedelta(days=i)
+            p = planner.day_plan(d, goals)
+            cardio = f" {p['cardio_minutes']} min {p['cardio_type']}" if p["cardio_type"] else ""
+            lines.append(f"{d:%a %Y-%m-%d}: {p['focus']}{cardio}")
+    return "\n".join(lines)
+
 
 def context(plan, entries, equipment, goals, per_tag=10):
     """Today's plan and a short list of safe exercises the coach may propose (names must match exactly)."""

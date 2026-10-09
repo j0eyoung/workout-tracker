@@ -23,13 +23,14 @@ import meditation
 import mindbody
 import ninjas_sync
 import planedit
+import planner
 import tts
 from db import DB_PATH, get_last_log
 from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.3.6"
+VERSION = "0.4.0"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -85,12 +86,24 @@ def selected_sports():
     return chosen if chosen is not None else ["skiing", "snowboarding", "triathlon"]
 
 
+def _generate(date_iso):
+    """The engine's workout for a date, following that day's place in the weekly plan."""
+    goals = selected_sports()
+    d = datetime.date.fromisoformat(date_iso)
+    day = planner.day_plan(d, goals)
+    w = engine.generate_next_workout(
+        get_last_log(), today=d, library=get_library()["entries"], equipment=library.selected_equipment(),
+        goals=goals, focus=day["focus"], cardio_type=day["cardio_type"])
+    if day.get("cardio_minutes") and w.get("cardio_type") != "recovery":
+        # minutes the coach put in the week: never more than 10 above what progression allows
+        minutes = min(int(day["cardio_minutes"]), (w.get("cardio_minutes") or 0) + 10)
+        w = planedit.apply(w, [{"op": "cardio", "type": w["cardio_type"], "minutes": minutes, "why": "weekly plan"}])
+    return w
+
+
 def todays_workout():
     today = history.local_today()
-    w = engine.generate_next_workout(
-        get_last_log(), today=datetime.date.fromisoformat(today),
-        library=get_library()["entries"], equipment=library.selected_equipment(), goals=selected_sports())
-    return planedit.apply(w, planedit.overrides_for(today))
+    return planedit.apply(_generate(today), planedit.overrides_for(today))
 
 
 # --- Draft rows: the page uses {exercise, set, weight, reps, done}; 0.2.x drafts used table headers ---
@@ -209,13 +222,18 @@ class CoachMessage(BaseModel):
 def ask_coach(m: CoachMessage):
     plan = todays_workout()
     lib = get_library()
-    context = planedit.INSTRUCTIONS + "\n\n" + planedit.context(plan, lib["entries"], library.selected_equipment(), selected_sports())
+    today = datetime.date.fromisoformat(history.local_today())
+    context = "\n\n".join([planedit.INSTRUCTIONS, planedit.context(plan, lib["entries"], library.selected_equipment(), selected_sports()),
+                           planedit.week_context(today, selected_sports())])
     reply, error = coach.ask(m.message, m.recent, plan_context=context,
                              season=library.load_settings().get("season_start", ""))
     reply, data = planedit.extract(reply)
-    changes, rejected = planedit.validate(data, plan, lib["by_name"], library.selected_equipment())
-    return {"reply": reply, "error": error, "rejected": rejected,
-            "changes": [dict(c, label=planedit.label(c)) for c in changes]}
+    ops = (data or {}).get("changes") or []
+    changes, rejected = planedit.validate({"changes": [c for c in ops if c.get("op") != "day"]}, plan, lib["by_name"],
+                                          library.selected_equipment())
+    days, days_bad = planedit.validate_days([c for c in ops if c.get("op") == "day"], today, selected_sports())
+    return {"reply": reply, "error": error, "rejected": rejected + days_bad,
+            "changes": [dict(c, label=planedit.label(c)) for c in changes + days]}
 
 
 class PlanChanges(BaseModel):
@@ -226,15 +244,47 @@ class PlanChanges(BaseModel):
 def apply_changes(p: PlanChanges):
     """Joe approved the coach's changes. Checked again here, so only valid ones are ever saved."""
     lib = get_library()
-    base = engine.generate_next_workout(
-        get_last_log(), today=datetime.date.fromisoformat(history.local_today()),
-        library=lib["entries"], equipment=library.selected_equipment(), goals=selected_sports())
     today = history.local_today()
-    plan = planedit.apply(base, planedit.overrides_for(today))
-    allowed, rejected = planedit.validate({"changes": p.changes}, plan, lib["by_name"], library.selected_equipment())
+    plan = planedit.apply(_generate(today), planedit.overrides_for(today))
+    day_ops = [c for c in p.changes if c.get("op") == "day"]
+    allowed, rejected = planedit.validate({"changes": [c for c in p.changes if c.get("op") != "day"]}, plan,
+                                          lib["by_name"], library.selected_equipment())
+    days_ok, days_bad = planedit.validate_days(day_ops, datetime.date.fromisoformat(today), selected_sports())
     if allowed:
         planedit.save(today, allowed)
-    return {"ok": True, "applied": len(allowed), "rejected": rejected}
+    if days_ok:
+        planner.save_changes(days_ok)
+    return {"ok": True, "applied": len(allowed) + len(days_ok), "rejected": rejected + days_bad}
+
+
+@app.get("/api/week")
+def get_week(offset: int = 0):
+    """The week (Monday to Sunday). offset 0 = this week, 1 = next week."""
+    today = datetime.date.fromisoformat(history.local_today())
+    start = planner.monday(today) + datetime.timedelta(days=7 * max(-1, min(offset, 2)))
+    goals = selected_sports()
+    done = {w["date"] for w in history.get_history(DB_PATH, 60)}
+    days = planner.week(start, today, goals, done)
+    for day in days:
+        if day["status"] in ("today", "upcoming") and day["focus"] in ("strength", "cardio"):
+            w = _generate(day["date"])
+            day["strength"] = [n for n in w["strength"]] if day["focus"] == "strength" else []
+            day["cardio_text"] = f"{w['cardio_minutes']} min {w['cardio_type']}" if day["focus"] != "rest" else None
+    season = library.load_settings().get("season_start") or ""
+    weeks_left = None
+    if season:
+        try:
+            weeks_left = max(0, (datetime.date.fromisoformat(season) - today).days // 7)
+        except ValueError:
+            pass
+    return {"start": start.isoformat(), "offset": offset, "days": days, "sports": goals,
+            "season_start": season, "weeks_to_season": weeks_left}
+
+
+@app.post("/api/week/reset")
+def reset_week():
+    planner.clear_week(planner.monday(datetime.date.fromisoformat(history.local_today())))
+    return {"ok": True}
 
 
 @app.post("/api/plan/reset")

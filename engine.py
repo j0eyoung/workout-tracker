@@ -67,10 +67,14 @@ class WorkoutEngine:
     def __init__(self, db_path="workout_tracker.db"):
         self.db_path = db_path
 
-    def generate_next_workout(self, last_log, today=None, library=None, equipment=None, goals=None):
+    def generate_next_workout(self, last_log, today=None, library=None, equipment=None, goals=None,
+                              focus=None, cardio_type=None):
         """
         Dynamically builds the next workout based on active goals
         (skiing, snowboarding, triathlon) and current medical symptoms.
+        `focus` comes from the weekly plan: "rest" and "recovery" make a recovery day, "cardio" keeps the strength part
+        to base core work. Symptoms always win: a kidney score above 5 forces a recovery day whatever the week says.
+        `cardio_type` is the week's planned cardio, used only when it is safe for today's pelvic floor score.
         """
         active_goals = list(goals) if goals is not None else ["snowboarding", "triathlon"]
         self.goals = active_goals
@@ -87,8 +91,8 @@ class WorkoutEngine:
         }
 
         # --- MEDICAL AUTO-REGULATION ---
-        if kidney_pain > 5:
-            # Flank is acting up: Force a recovery day, no twisting, lots of breathing
+        if kidney_pain > 5 or focus in ("rest", "recovery"):
+            # Flank is acting up (or the week says rest): recovery day, no twisting, lots of breathing
             workout_plan["strength"].append("Supported Butterfly Pose (3 mins)")
             workout_plan["strength"].append("Child's Pose (Focus on left rib expansion)")
             self._add_accessories(workout_plan, library, equipment, today, recovery=True)
@@ -99,11 +103,11 @@ class WorkoutEngine:
         # Base core stability is always included
         workout_plan["strength"].extend(["Supine Heel Slides", "Wall-Push Deadbugs"])
 
-        if "snowboarding" in active_goals or "skiing" in active_goals:
-            # Inject lateral edge control and quad endurance (Zero spinal load)
-            workout_plan["strength"].extend(["Wall Sits (45s)", "Banded Lateral Walks", "Wall Tibialis Raises"])
-
-        self._add_accessories(workout_plan, library, equipment, today, recovery=False)
+        if focus != "cardio":
+            if "snowboarding" in active_goals or "skiing" in active_goals:
+                # Inject lateral edge control and quad endurance (Zero spinal load)
+                workout_plan["strength"].extend(["Wall Sits (45s)", "Banded Lateral Walks", "Wall Tibialis Raises"])
+            self._add_accessories(workout_plan, library, equipment, today, recovery=False)
 
         # --- CARDIO & TRIATHLON PROGRAMMING ---
         if "triathlon" in active_goals:
@@ -111,15 +115,18 @@ class WorkoutEngine:
             if pf_tightness >= 7:
                 # High impact (running) or seated pressure (biking) will flare the pelvic floor.
                 # Force Swimming: Zero gravity, massive cardio, relieves pelvic pressure.
-                cardio_type = "swim"
+                auto_type = "swim"
             elif pf_tightness >= 4:
                 # Moderate tightness: Biking is okay if saddle pressure is managed, or backwards walking.
-                cardio_type = "bike"
+                auto_type = "bike"
             else:
                 # Pelvic floor is relaxed: Safe to train running impact
-                cardio_type = "run"
+                auto_type = "run"
         else:
-            cardio_type = "walk"
+            auto_type = "walk"
+        # The week's plan may ask for a different type, but only one that is safe at today's pelvic floor score
+        safe_for_pf = {"swim": True, "walk": True, "bike": pf_tightness < 7, "run": pf_tightness < 4}
+        cardio_type = cardio_type if cardio_type in safe_for_pf and safe_for_pf[cardio_type] else auto_type
         self._set_cardio(workout_plan, cardio_type, rpe, kidney_pain, last_workout, today)
 
         return workout_plan

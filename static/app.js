@@ -57,6 +57,7 @@ const state = {
   ],
   coachBusy: false,
   mind: null, mindFilter: "all", mindQ: "",
+  week: null, weekOffset: 0, coachDraft: "",
   voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
   lib: { q: "", focus: "", muscle: "", equipment: "", pictures: true, filtered: false, data: null, results: [], offset: 0 },
@@ -369,6 +370,35 @@ async function renderHistory() {
     <button type="button" class="btn small" data-act="report">Make an HTML progress report (AI Coach)</button>`;
 }
 
+// --- Week -------------------------------------------------------------------------------------
+
+async function renderWeek() {
+  const off = state.weekOffset;
+  if (!state.week || state.week.offset !== off) state.week = await api(`api/week?offset=${off}`);
+  const w = state.week;
+  const badge = { done: "✓ done", today: "today", missed: "missed", past: "", upcoming: "" };
+  const range = `${formatDate(w.days[0].date)} – ${formatDate(w.days[6].date)}`;
+  $view.innerHTML = `
+    <div class="two-col" style="margin-bottom:8px">
+      <button type="button" class="btn small" data-act="week-nav" data-v="0" ${off === 0 ? "disabled" : ""}>This week</button>
+      <button type="button" class="btn small" data-act="week-nav" data-v="1" ${off === 1 ? "disabled" : ""}>Next week</button>
+    </div>
+    <p class="small muted" style="margin:0 0 8px">${esc(range)}${w.weeks_to_season != null ? ` · ${w.weeks_to_season} weeks to snow season` : ""}</p>
+    ${w.days.map((d) => `<div class="card week-day ${d.status}">
+      <div class="week-head"><strong>${esc(d.weekday)}</strong> <span class="muted">${esc(formatDate(d.date))}</span>
+        <span class="badge">${esc(d.label)}</span>${badge[d.status] ? `<span class="badge${d.status === "missed" ? " bad" : ""}">${badge[d.status]}</span>` : ""}</div>
+      ${d.cardio_text && d.focus === "cardio" ? `<div><strong>${esc(d.cardio_text)}</strong>${d.long ? " (long and easy)" : ""}</div>` : ""}
+      ${d.strength?.length ? `<div class="sub">${esc(d.strength.slice(0, 6).join(", "))}${d.strength.length > 6 ? "…" : ""}</div>` : ""}
+      <div class="small muted">${esc(d.mind)}</div>
+      ${d.changed ? `<div class="small" style="color:var(--accent)">Changed by your coach${d.note ? `: ${esc(d.note)}` : ""}</div>` : ""}
+    </div>`).join("")}
+    <div class="row-actions">
+      <button type="button" class="btn small" data-act="week-ask">Ask the coach to adjust my week</button>
+      <button type="button" class="btn link small" data-act="week-reset">Undo coach changes</button>
+    </div>
+    <p class="small muted">Each day still adapts to how you feel: a high kidney score always turns the day into recovery.</p>`;
+}
+
 // --- Coach ------------------------------------------------------------------------------------
 
 function connectCard() {
@@ -426,7 +456,7 @@ function renderCoach() {
       ${state.coachBusy ? `<div class="msg assistant muted">Coach is thinking…</div>` : ""}
     </div>
     <div class="composer">
-      <textarea id="coach-input" placeholder="E.g. my kidney is tight today…" aria-label="Message the coach"></textarea>
+      <textarea id="coach-input" placeholder="E.g. my kidney is tight today…" aria-label="Message the coach">${esc(state.coachDraft)}</textarea>
       <button type="button" class="btn primary" style="width:auto" data-act="send" ${state.coachBusy || signedOut ? "disabled" : ""}>Send</button>
     </div>`;
   if (!signedOut) window.scrollTo({ top: document.body.scrollHeight });
@@ -436,6 +466,7 @@ async function sendCoach() {
   const input = document.getElementById("coach-input");
   const message = input.value.trim();
   if (!message || state.coachBusy) return;
+  state.coachDraft = "";
   const recent = state.coach.slice(-6);
   state.coach.push({ role: "user", content: message });
   state.coachBusy = true;
@@ -785,6 +816,20 @@ const actions = {
   },
   complete(el) { completeWorkout(el); },
   send() { sendCoach(); },
+  "week-nav"(el) { state.weekOffset = Number(el.dataset.v); render(); },
+  "week-ask"() {
+    state.coachDraft = "Look at my week and suggest any changes, thinking about my sports and how I've been feeling.";
+    history.replaceState(null, "", "#coach");
+    showTab("coach");
+  },
+  async "week-reset"() {
+    if (!confirm("Remove the coach's changes to this week and next?")) return;
+    await api("api/week/reset", { method: "POST" });
+    state.week = null;
+    await refreshPlan();
+    render();
+    toast("Back to the usual week");
+  },
   "mind-filter"(el) { state.mindFilter = el.dataset.v; render(); },
   "med-filter"(el) { state.medFilter = el.dataset.v; state.medShown = 10; render(); },
   "med-more"() { state.medShown += 10; render(); },
@@ -837,6 +882,7 @@ const actions = {
     try {
       const r = await api("api/plan/changes", { method: "POST", body: JSON.stringify({ changes: m.changes }) });
       m.applied = r.applied;
+      state.week = null;
       if (saveTimer) await saveDraft();
       await refreshPlan();
       toast(r.applied ? "Today's plan updated" : "Nothing was changed");
@@ -960,14 +1006,35 @@ document.addEventListener("visibilitychange", () => {
 // --- Tabs -------------------------------------------------------------------------------------
 
 function render() {
-  const views = { today: renderToday, history: renderHistory, coach: renderCoach, library: renderLibrary, mind: renderMindBody, settings: renderSettings };
+  const views = { today: renderToday, week: renderWeek, history: renderHistory, coach: renderCoach, library: renderLibrary, mind: renderMindBody, settings: renderSettings };
   Promise.resolve(views[state.tab]()).catch(() => {
     $view.innerHTML = `<div class="empty">Couldn't load this page. Pull down to refresh or try again.</div>`;
   });
 }
 
+const TAB_ORDER = ["today", "week", "history", "coach", "library", "mind", "settings"];
+
+// Swipe left/right anywhere on the page to move between tabs (ignored on sliders, text boxes, audio and sideways-scrolling strips)
+let swipe = null;
+document.addEventListener("touchstart", (e) => {
+  const t = e.target;
+  const blocked = e.touches.length !== 1 || t.closest("input, textarea, select, audio, .chips, .gallery, pre, [data-noswipe]");
+  swipe = blocked ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+}, { passive: true });
+document.addEventListener("touchend", (e) => {
+  if (!swipe) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, quick = Date.now() - swipe.t < 700;
+  swipe = null;
+  if (!quick || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+  const i = TAB_ORDER.indexOf(state.tab) + (dx < 0 ? 1 : -1);
+  if (i < 0 || i >= TAB_ORDER.length) return;
+  history.replaceState(null, "", `#${TAB_ORDER[i]}`);
+  showTab(TAB_ORDER[i]);
+}, { passive: true });
+
 function showTab(tab) {
-  if (!["today", "history", "coach", "library", "mind", "settings"].includes(tab)) tab = "today";
+  if (!TAB_ORDER.includes(tab)) tab = "today";
   state.tab = tab;
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   if (tab === "history") state.history = null;   // always fresh
