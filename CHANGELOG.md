@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 - More Yoga Pictures
+
+### 🌟 Features
+* **Nine more yoga poses now have pictures:** staff pose, goddess pose, head-to-knee forward fold, crocodile, gate pose, wide-leg forward fold, easy seat, wide-angle seated forward fold and the wrist stretch. They come from freely licensed Wikimedia Commons photos, bundled in the add-on, with the photographer and licence shown under each picture.
 ## 0.6.2 - Second Session Logged On Its Own
 
 ### 🌟 Features

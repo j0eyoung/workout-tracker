@@ -353,6 +353,15 @@ EXTRA_PHOTOS = {
     "viparita-karani": ("Shixart1985", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Woman_reading_a_book._Legs_up_the_wall_pose.jpg"),
     "supta-baddha-konasana": ("Trollderella (cropped by Ludmiła Pilecka)", "CC BY-SA 2.0", "https://commons.wikimedia.org/wiki/File:Supta_baddha_konasana_variation.jpg"),
     "tadasana": ("Kennguru", "CC BY 3.0", "https://commons.wikimedia.org/wiki/File:Tadasana_Yoga-Asana_Nina-Mel.jpg"),
+    "dandasana": ("Thamizhpparithi Maari", "CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File:A_style_of_Dandasana.JPG"),
+    "goddess-pose": ("Loveobx23", "CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File:2007-08-24_ytc_hawaii_5821.jpg"),
+    "janu-sirsasana": ("Nicholas A. Tonelli", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Flickr_-_Nicholas_T_-_Long-Named_Pose.jpg"),
+    "makarasana": ("Satheesan.vn", "CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File:Crocodile_pose.JPG"),
+    "parighasana": ("Nikiwiki242", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Gate_Pose.jpg"),
+    "prasarita-padottanasana": ("LYUbdevanshi77", "CC0", "https://commons.wikimedia.org/wiki/File:Devanshi_Chatrasan.jpg"),
+    "sukhasana": ("lululemon athletica", "CC BY 2.0", "https://commons.wikimedia.org/wiki/File:Cross-legged_sitting,_female.jpg"),
+    "upavistha-konasana": ("LYUbdevanshi77", "CC0", "https://commons.wikimedia.org/wiki/File:Devanshi_Ugrasan.jpg"),
+    "wrist-release": ("BruceBlaus", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Exercise_Wrist_Flexor_Stretch.png"),
 }
 
 
