@@ -191,6 +191,11 @@ def overrides_for(date):
     return (library.load_settings().get("plan_overrides") or {}).get(date, {}).get("changes", [])
 
 
+def session2_names(date):
+    """Exercises added as a second session today (their reason starts with 'second session')."""
+    return [c["name"] for c in overrides_for(date) if c.get("op") == "add" and str(c.get("why", "")).startswith("second session")]
+
+
 def save(date, changes):
     all_ov = library.load_settings().get("plan_overrides") or {}
     existing = all_ov.get(date, {}).get("changes", [])

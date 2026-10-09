@@ -33,7 +33,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -173,6 +173,7 @@ def plan():
         "cardio": {"text": w["cardio"], "minutes": w.get("cardio_minutes"), "note": w.get("cardio_note"),
                    "type": w.get("cardio_type"), "images": CARDIO_IMAGES.get(w.get("cardio_type"), [])},
         "extra_cardio": w.get("extra_cardio"),
+        "session2": planedit.session2_names(today),
         "draft": {"tracker": [_page_row(r) for r in draft.get("tracker", [])], "checks": draft.get("checks", {})},
     }
 
@@ -197,12 +198,33 @@ class Completion(BaseModel):
     kidney: int
     notes: str = ""
     tracker: list[dict] = []
+    session: int = 1          # 2 = the second session of the day, logged on its own
 
 
 @app.post("/api/complete")
 def complete(c: Completion):
-    log_id = history.complete_workout(DB_PATH, c.rpe, c.pelvic_floor, c.kidney, c.notes, todays_workout(),
-                                      [_history_row(r) for r in c.tracker])
+    today = history.local_today()
+    w = todays_workout()
+    names2 = set(planedit.session2_names(today))
+    if c.session == 2:
+        w2 = {"session": 2, "strength": [n for n in w["strength"] if n in names2], "extra_cardio": w.get("extra_cardio"),
+              "cardio_type": (w.get("extra_cardio") or {}).get("type"), "cardio_minutes": (w.get("extra_cardio") or {}).get("minutes"),
+              "cardio": (f"{w['extra_cardio']['minutes']} min easy {w['extra_cardio']['type']}: {w['extra_cardio']['text']}"
+                         if w.get("extra_cardio") else "")}
+        rows = [r for r in c.tracker if _page_row(r).get("exercise") in names2]
+        log_id = history.complete_workout(DB_PATH, c.rpe, c.pelvic_floor, c.kidney, c.notes, w2,
+                                          [_history_row(_page_row(r)) for r in rows])
+        return {"ok": True, "log_id": log_id}
+    # First session: log everything except the second session, and keep the second session's sets in the draft
+    first = dict(w, strength=[n for n in w["strength"] if n not in names2])
+    first.pop("extra_cardio", None)
+    first["accessories"] = [a for a in first.get("accessories", []) if a["name"] not in names2]
+    mine = [r for r in c.tracker if _page_row(r).get("exercise") not in names2]
+    kept = [r for r in c.tracker if _page_row(r).get("exercise") in names2]
+    log_id = history.complete_workout(DB_PATH, c.rpe, c.pelvic_floor, c.kidney, c.notes, first,
+                                      [_history_row(_page_row(r)) for r in mine])
+    if kept:
+        history.save_draft(DB_PATH, kept, {}, today)
     return {"ok": True, "log_id": log_id}
 
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2 - Second Session Logged On Its Own
+
+### 🌟 Features
+* **The second session is its own workout.** It has its own section at the bottom of the Today tab with its own effort rating and notes, and its own "Complete second session" button. It shows up as a separate entry in History.
+* Finishing the first workout no longer touches the second session's sets: anything you have typed for it is kept until you complete it.
+* The first workout logs only its own exercises, so your suggested weights and progress charts are not mixed up with the second session.
 ## 0.6.1 - Second Sessions On Request
 
 ### 🌟 Features

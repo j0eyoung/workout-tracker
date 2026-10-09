@@ -40,7 +40,7 @@ function setSaveState(text, error = false) {
   $save.classList.toggle("error", error);
 }
 
-const FINISH_DEFAULTS = { rpe: 5, pf: 1, kidney: 1, notes: "" };
+const FINISH_DEFAULTS = { rpe: 5, pf: 1, kidney: 1, notes: "", rpe2: 5, notes2: "" };
 const state = {
   tab: "today",
   status: null,
@@ -234,7 +234,7 @@ function renderToday() {
     ${p.warmup.map(warmupCard).join("")}
 
     <h2>2. Strength &amp; stability</h2>
-    ${p.strength.map(strengthCard).join("")}
+    ${p.strength.filter((e) => !(p.session2 || []).includes(e.name)).map(strengthCard).join("")}
     ${state.extras.map((n) => strengthCard(exerciseFor(n))).join("")}
     <button type="button" class="btn small" data-act="add-exercise">+ Add another exercise</button>
 
@@ -246,16 +246,6 @@ function renderToday() {
       ${pictures(cardio.images)}
     </div>
 
-    ${p.extra_cardio ? `<div class="card"><h3>Second session: easy ${esc(p.extra_cardio.type)}</h3>
-      <div class="minutes">${esc(p.extra_cardio.minutes)} <small>min</small></div>
-      <p class="sub">${esc(p.extra_cardio.text)}. Easy pace, later in the day.</p></div>` : ""}
-    <div class="card">
-      <button type="button" class="btn small" data-act="second-toggle">${state.secondOpen ? "Cancel" : "+ Add a second session"}</button>
-      ${state.secondOpen ? `<p class="sub" style="margin:10px 0 6px">What would you like to add today?</p>
-        <div class="chips wrap">${[["strength", "Strength (different group)"], ["core", "Core"], ["mobility", "Mobility"], ["cardio", "Easy cardio"]].map(([k, l]) =>
-          `<button type="button" class="chip" data-act="second-add" data-v="${k}">${l}</button>`).join("")}</div>
-        <p class="small muted" style="margin:8px 0 0">It uses your equipment and the same kidney and pelvic floor safety checks. Extra exercises appear in the strength list; extra cardio is 20 easy minutes.</p>` : ""}
-    </div>
     ${p.cooldown?.cards?.length ? `<h2>4. Cool-down <span class="muted">(optional)</span></h2>
     <p class="small muted" style="margin-top:0">${esc(p.cooldown.note)}</p>
     ${p.cooldown.cards.map(mindCard).join("")}` : ""}
@@ -268,7 +258,33 @@ function renderToday() {
       <label class="sub" for="notes">Notes for the coach</label>
       <textarea id="notes" data-finish="notes" placeholder="How did it feel?">${esc(state.finish.notes)}</textarea>
       <div style="height:12px"></div>
-      <button type="button" class="btn primary" data-act="complete">Complete workout</button>
+      <button type="button" class="btn primary" data-act="complete" data-session="1">Complete workout</button>
+    </div>
+    ${secondSessionSection(p)}`;
+}
+
+// A second workout on the same day, logged on its own (its own effort rating and its own History entry)
+function secondSessionSection(p) {
+  const names = p.session2 || [];
+  const has = names.length || p.extra_cardio;
+  return `<h2>Second session${has ? "" : " <span class=\"muted\">(optional)</span>"}</h2>
+    ${has ? `${names.map((n) => strengthCard(exerciseFor(n))).join("")}
+      ${p.extra_cardio ? `<div class="card"><h3>Easy ${esc(p.extra_cardio.type)}</h3>
+        <div class="minutes">${esc(p.extra_cardio.minutes)} <small>min</small></div>
+        <p class="sub">${esc(p.extra_cardio.text)}. Easy pace, later in the day.</p></div>` : ""}
+      <div class="card">
+        ${slider("rpe2", "Second session effort")}
+        <label class="sub" for="notes2">Notes</label>
+        <textarea id="notes2" data-finish="notes2" placeholder="How did it feel?">${esc(state.finish.notes2)}</textarea>
+        <div style="height:12px"></div>
+        <button type="button" class="btn primary" data-act="complete" data-session="2">Complete second session</button>
+      </div>` : ""}
+    <div class="card">
+      <button type="button" class="btn small" data-act="second-toggle">${state.secondOpen ? "Cancel" : "+ Add a second session"}</button>
+      ${state.secondOpen ? `<p class="sub" style="margin:10px 0 6px">What would you like to add today?</p>
+        <div class="chips wrap">${[["strength", "Strength (different group)"], ["core", "Core"], ["mobility", "Mobility"], ["cardio", "Easy cardio"]].map(([k, l]) =>
+          `<button type="button" class="chip" data-act="second-add" data-v="${k}">${l}</button>`).join("")}</div>
+        <p class="small muted" style="margin:8px 0 0">It uses your equipment and the same kidney and pelvic floor safety checks. Extra cardio is 20 easy minutes.</p>` : ""}
     </div>`;
 }
 
@@ -281,8 +297,9 @@ function rerenderCard(key) {
     : strengthCard(exerciseFor(name));
 }
 
-async function completeWorkout(btn) {
-  if (!confirm("Save this workout to your History?")) return;
+async function completeWorkout(btn, session = 1) {
+  if (!confirm(session === 2 ? "Save the second session to your History?" : "Save this workout to your History?")) return;
+  const label = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Saving…";
   clearTimeout(saveTimer);
@@ -290,19 +307,30 @@ async function completeWorkout(btn) {
     await api("api/complete", {
       method: "POST",
       body: JSON.stringify({
-        rpe: Number(state.finish.rpe), pelvic_floor: Number(state.finish.pf), kidney: Number(state.finish.kidney),
-        notes: state.finish.notes, tracker: draftRows(),
+        rpe: Number(session === 2 ? state.finish.rpe2 : state.finish.rpe), pelvic_floor: Number(state.finish.pf),
+        kidney: Number(state.finish.kidney), notes: session === 2 ? state.finish.notes2 : state.finish.notes,
+        tracker: draftRows(), session,
       }),
     });
-    store.remove(finishKey());
+    if (session === 1) {
+      // keep the second session's effort and notes; the first session's are done
+      const keep = { rpe2: state.finish.rpe2, notes2: state.finish.notes2 };
+      store.remove(finishKey());
+      state.finish = { ...FINISH_DEFAULTS, ...keep };
+      store.set(finishKey(), state.finish);
+    } else {
+      state.finish.rpe2 = FINISH_DEFAULTS.rpe2;
+      state.finish.notes2 = "";
+      store.set(finishKey(), state.finish);
+    }
     state.history = null;
-    toast("Workout saved to History 💪 Your next plan is ready.");
+    toast(session === 2 ? "Second session saved to History 💪" : "Workout saved to History 💪 Your next plan is ready.");
     await refreshPlan();
     window.scrollTo({ top: 0 });
   } catch {
     toast("Couldn't save. Check your connection and try again.");
     btn.disabled = false;
-    btn.textContent = "Complete workout";
+    btn.textContent = label;
   }
 }
 
@@ -867,7 +895,7 @@ const actions = {
     render();
     scheduleSave();
   },
-  complete(el) { completeWorkout(el); },
+  complete(el) { completeWorkout(el, Number(el.dataset.session || 1)); },
   send() { sendCoach(); },
   goto(el) { history.replaceState(null, "", `#${el.dataset.v}`); showTab(el.dataset.v); },
   "week-nav"(el) { state.weekOffset = Number(el.dataset.v); render(); },
