@@ -27,6 +27,29 @@ def _cardio_type(slot, goals):
     return {"a": "walk", "b": "bike", "long": "walk"}[slot]
 
 
+# Each strength day works a different group, and the groups shift every week so no weekday is always the same.
+THEMES = ["legs", "back", "hips"]
+THEME_LABELS = {"legs": "Legs: quads and glutes", "back": "Back and posture", "hips": "Hips and balance",
+                "core": "plus core", "mobility": "plus hip and spine mobility"}
+PHASES = ["Base", "Build", "Build+", "Easy week"]  # 4-week cycle; the easy week trims the extras
+
+
+def week_number(date):
+    return date.isocalendar()[1]
+
+
+def phase(date):
+    return PHASES[week_number(date) % 4]
+
+
+def theme_for(date, focus):
+    if focus == "strength":
+        return THEMES[(date.weekday() + week_number(date)) % 3]
+    if focus == "cardio":
+        return "core" if (date.weekday() // 2 + week_number(date)) % 2 == 0 else "mobility"
+    return None
+
+
 def _base(date, goals):
     focus, slot = PATTERN[date.weekday()]
     day = {"focus": focus, "cardio_type": None, "cardio_minutes": None}
@@ -53,6 +76,9 @@ def day_plan(date, goals):
         elif day["focus"] == "cardio" and not day["cardio_type"]:
             base = _base(date, goals)
             day["cardio_type"] = base["cardio_type"] or _cardio_type("a", goals)
+    day["theme"] = theme_for(date, day["focus"])
+    day["theme_label"] = THEME_LABELS.get(day["theme"]) if day["theme"] else None
+    day["phase"] = phase(date)
     return day
 
 

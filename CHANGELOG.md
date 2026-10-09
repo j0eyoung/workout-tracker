@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2 - A Different Muscle Group Every Day, A Different Week Every Week
+
+### 🌟 Features
+* **Each strength day works a different group:** legs (quads and glutes, with ski and snowboard leg work), back and posture, or hips and balance. The three groups rotate week to week, so Monday is not always the same.
+* **Cardio days add one short piece of extra work** for a group that isn't trained that day (core, or hip and spine mobility), which also alternates from week to week.
+* **A 4-week cycle:** Base, Build, Build+, then an Easy week that trims one extra from each strength day. The Week tab shows which week you are in and what each day is for.
+* The coach sees the muscle group planned for each day when it suggests changes.
 ## 0.4.1 - Roomier Tab Bar and Sports-Aware Coach
 
 ### 🌟 Features

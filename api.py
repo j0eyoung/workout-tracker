@@ -30,7 +30,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -93,7 +93,11 @@ def _generate(date_iso):
     day = planner.day_plan(d, goals)
     w = engine.generate_next_workout(
         get_last_log(), today=d, library=get_library()["entries"], equipment=library.selected_equipment(),
-        goals=goals, focus=day["focus"], cardio_type=day["cardio_type"])
+        goals=goals, focus=day["focus"], cardio_type=day["cardio_type"], theme=day["theme"])
+    if day["phase"] == "Easy week" and day["focus"] == "strength" and w.get("accessories"):
+        last = w["accessories"].pop()          # easy week: one fewer extra
+        if last["name"] in w["strength"]:
+            w["strength"].remove(last["name"])
     if day.get("cardio_minutes") and w.get("cardio_type") != "recovery":
         # minutes the coach put in the week: never more than 10 above what progression allows
         minutes = min(int(day["cardio_minutes"]), (w.get("cardio_minutes") or 0) + 10)
@@ -277,7 +281,7 @@ def get_week(offset: int = 0):
             weeks_left = max(0, (datetime.date.fromisoformat(season) - today).days // 7)
         except ValueError:
             pass
-    return {"start": start.isoformat(), "offset": offset, "days": days, "sports": goals,
+    return {"start": start.isoformat(), "offset": offset, "days": days, "sports": goals, "phase": planner.phase(start),
             "season_start": season, "weeks_to_season": weeks_left}
 
 

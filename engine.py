@@ -41,12 +41,31 @@ def accessory_slots(goals):
     return slots
 
 
-def pick_accessories(library, equipment, today, recovery, exclude, goals=("snowboarding", "triathlon")):
+# Muscle-group themes from the weekly plan: each strength day works a different group, and the groups rotate each week.
+THEME_SLOTS = {
+    "legs": [("legs", "Quads and glutes"), ("legs", "Single-leg and hip strength"), ("core", "Core control")],
+    "back": [("upper back", "Upper back and posture"), ("upper back", "Pulling strength"), ("core", "Core control"),
+             ("mobility", "Chest and spine mobility")],
+    "hips": [("balance", "Balance and ankle control"), ("legs", "Glutes and hips"), ("core", "Core control"),
+             ("mobility", "Hip mobility")],
+}
+# Cardio days add one short piece of work for a group that isn't trained that day
+CARDIO_THEME_SLOTS = {"core": [("core", "Core")], "mobility": [("mobility", "Hip and spine mobility")]}
+
+
+def theme_slots(theme, goals):
+    slots = list(THEME_SLOTS[theme])
+    if theme == "legs" and SNOW_SPORTS & set(goals):
+        slots[0] = ("legs", "Snow legs: quad endurance and control")
+    return slots
+
+
+def pick_accessories(library, equipment, today, recovery, exclude, goals=("snowboarding", "triathlon"), slots=None, seed=""):
     """Safe library exercises for today's open slots. Same picks all day, new picks tomorrow."""
-    rng = random.Random(today.isoformat())
+    rng = random.Random(f"{today.isoformat()}{seed}")
     pool = [e for e in library if e["safe"] and e["equipment"] in equipment and e["name"] not in exclude]
     picks = []
-    for goal, why in (RECOVERY_SLOTS if recovery else accessory_slots(goals)):
+    for goal, why in (RECOVERY_SLOTS if recovery else (slots if slots is not None else accessory_slots(goals))):
         taken = {p["name"] for p in picks}
         options = [e for e in pool if goal in e["goal_tags"] and e["name"] not in taken]
         if recovery:
@@ -68,7 +87,7 @@ class WorkoutEngine:
         self.db_path = db_path
 
     def generate_next_workout(self, last_log, today=None, library=None, equipment=None, goals=None,
-                              focus=None, cardio_type=None):
+                              focus=None, cardio_type=None, theme=None):
         """
         Dynamically builds the next workout based on active goals
         (skiing, snowboarding, triathlon) and current medical symptoms.
@@ -103,11 +122,16 @@ class WorkoutEngine:
         # Base core stability is always included
         workout_plan["strength"].extend(["Supine Heel Slides", "Wall-Push Deadbugs"])
 
-        if focus != "cardio":
-            if "snowboarding" in active_goals or "skiing" in active_goals:
-                # Inject lateral edge control and quad endurance (Zero spinal load)
+        if focus == "cardio":
+            # Cardio day: base core work plus one short piece for a group that isn't trained today
+            self._add_accessories(workout_plan, library, equipment, today, recovery=False,
+                                  slots=CARDIO_THEME_SLOTS.get(theme, []), seed=f"c{theme}")
+        else:
+            if ("snowboarding" in active_goals or "skiing" in active_goals) and theme in (None, "legs"):
+                # Inject lateral edge control and quad endurance (Zero spinal load) on leg days
                 workout_plan["strength"].extend(["Wall Sits (45s)", "Banded Lateral Walks", "Wall Tibialis Raises"])
-            self._add_accessories(workout_plan, library, equipment, today, recovery=False)
+            slots = theme_slots(theme, active_goals) if theme in THEME_SLOTS else None
+            self._add_accessories(workout_plan, library, equipment, today, recovery=False, slots=slots, seed=f"t{theme}")
 
         # --- CARDIO & TRIATHLON PROGRAMMING ---
         if "triathlon" in active_goals:
@@ -131,11 +155,11 @@ class WorkoutEngine:
 
         return workout_plan
 
-    def _add_accessories(self, workout_plan, library, equipment, today, recovery):
+    def _add_accessories(self, workout_plan, library, equipment, today, recovery, slots=None, seed=""):
         if not library:
             return
         picks = pick_accessories(library, set(equipment or []), today, recovery, set(workout_plan["strength"]),
-                                 getattr(self, "goals", ("snowboarding", "triathlon")))
+                                 getattr(self, "goals", ("snowboarding", "triathlon")), slots=slots, seed=seed)
         workout_plan["strength"].extend(p["name"] for p in picks)
         workout_plan["accessories"] = picks
 

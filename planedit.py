@@ -216,7 +216,8 @@ def week_context(today, goals):
             d = start + datetime.timedelta(days=i)
             p = planner.day_plan(d, goals)
             cardio = f" {p['cardio_minutes']} min {p['cardio_type']}" if p["cardio_type"] else ""
-            lines.append(f"{d:%a %Y-%m-%d}: {p['focus']}{cardio}")
+            group = f" [{p['theme_label']}]" if p.get("theme_label") and p["focus"] == "strength" else ""
+            lines.append(f"{d:%a %Y-%m-%d}: {p['focus']}{group}{cardio}")
     return "\n".join(lines)
 
 
