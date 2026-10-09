@@ -112,7 +112,8 @@ def validate(data, plan, by_name, equipment):
 
 def validate_days(ops, today, goals):
     """Week-plan changes: {"op": "day", "date": "2026-10-10", "focus": "rest"|"recovery"|"strength"|"cardio", ...}.
-    Allowed for today and the next 13 days; every week must keep at least one rest or recovery day and at most 5$([char]10)    strength days, and cardio stays within 5-45 minutes."""
+    Allowed for today and the next 13 days; every week must keep at least one rest or recovery day and at most 5
+    strength days, and cardio stays within 5-45 minutes."""
     import planner
     allowed, rejected = [], []
     focus_by_date = {}
