@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 - Ski and Snowboard Season Ramp-Up
+
+### 🌟 Features
+* **The plan now builds toward opening day.** Set the snow season start date in Settings > Sports and the Week tab shows the phase and the days to go.
+  * **Foundation** (more than 8 weeks out): general base, core work continues.
+  * **Ski prep** (8 weeks to 2 weeks out): a second leg day each week, plus edge and balance control work on leg days.
+  * **Sharpen** (the last two weeks): leg-heavy, the last hard sessions.
+  * **Taper** (the last 3 days): no new leg load. Core, hips, mobility and rest, loads held and one set fewer.
+  * **Opening day:** a rest day. **In season:** keep one leg day a week.
+* The coach is told the phase and the days to opening day, so its advice and any plan changes follow it.
 ## 0.5.2 - More Pictures
 
 ### 🌟 Features

@@ -32,7 +32,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.5.2"
+VERSION = "0.6.0"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -83,6 +83,13 @@ def how_to(name, why=None):
 SPORT_OPTIONS = [("skiing", "Skiing"), ("snowboarding", "Snowboarding"), ("triathlon", "Triathlon")]
 
 
+def _season(today):
+    """Snow-season phase for a snow sport you have ticked; None otherwise."""
+    if not ({"skiing", "snowboarding"} & set(selected_sports())):
+        return None
+    return planner.season_info(today)
+
+
 def selected_sports():
     chosen = library.load_settings().get("sports")
     return chosen if chosen is not None else ["skiing", "snowboarding", "triathlon"]
@@ -95,7 +102,8 @@ def _generate(date_iso):
     day = planner.day_plan(d, goals)
     w = engine.generate_next_workout(
         get_last_log(), today=d, library=get_library()["entries"], equipment=library.selected_equipment(),
-        goals=goals, focus=day["focus"], cardio_type=day["cardio_type"], theme=day["theme"])
+        goals=goals, focus=day["focus"], cardio_type=day["cardio_type"], theme=day["theme"],
+        season_phase=day.get("season_phase"))
     if day["phase"] == "Easy week" and day["focus"] == "strength" and w.get("accessories"):
         last = w["accessories"].pop()          # easy week: one fewer extra
         if last["name"] in w["strength"]:
@@ -150,7 +158,11 @@ def plan():
     last = get_last_log()
     kidney, pf = last.get("kidney_flank_pain"), last.get("pelvic_floor_tightness")
     phase = planner.phase(datetime.date.fromisoformat(today))
+    season = _season(datetime.date.fromisoformat(today))
+    if season and season["phase"] in ("Taper", "Opening day"):
+        phase = "Easy week"          # opening week: hold loads, one set fewer
     return {
+        "season": season,
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
         "cooldown": {"note": mindbody.cooldown_note(kidney, pf), "cards": mindbody.cooldown(kidney, pf)},
@@ -241,8 +253,10 @@ def ask_coach(m: CoachMessage):
     today = datetime.date.fromisoformat(history.local_today())
     context = "\n\n".join([planedit.INSTRUCTIONS, planedit.context(plan, lib["entries"], library.selected_equipment(), selected_sports()),
                            planedit.week_context(today, selected_sports())])
-    reply, error = coach.ask(m.message, m.recent, plan_context=context,
-                             season=library.load_settings().get("season_start", ""), sports=selected_sports())
+    info = _season(today)
+    season_text = (f"{info['opening']} ({info['days']} days away)" if info["days"] > 0 else f"{info['opening']} (it has opened)") + \
+        f". Phase: {info['phase']}: {info['text']}" if info else ""
+    reply, error = coach.ask(m.message, m.recent, plan_context=context, season=season_text, sports=selected_sports())
     reply, data = planedit.extract(reply)
     ops = (data or {}).get("changes") or []
     changes, rejected = planedit.validate({"changes": [c for c in ops if c.get("op") != "day"]}, plan, lib["by_name"],
@@ -294,6 +308,7 @@ def get_week(offset: int = 0):
         except ValueError:
             pass
     return {"start": start.isoformat(), "offset": offset, "days": days, "sports": goals, "phase": planner.phase(start),
+            "season": _season(today),
             "season_start": season, "weeks_to_season": weeks_left}
 
 

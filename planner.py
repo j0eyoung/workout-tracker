@@ -45,11 +45,57 @@ def phase(date):
     return PHASES[week_number(date) % 4]
 
 
-def theme_for(date, focus):
+SEASON_PHASES = {
+    "Foundation": "Building a base. Keep the core work and general strength going.",
+    "Ski prep": "Two leg days a week, with single-leg strength and balance.",
+    "Sharpen": "Leg-heavy: quads, single-leg control and balance, the last hard weeks.",
+    "Taper": "Opening week: no new leg load. Core, hips, mobility and rest.",
+    "Opening day": "Ski day! Rest and fuel up.",
+    "In season": "Keep legs strong with one leg day a week; ski days count as training.",
+}
+
+
+def season_info(today, season_iso=None):
+    """{"days", "phase", "text"} for the snow season date set in Settings, or None."""
+    season_iso = season_iso if season_iso is not None else (library.load_settings().get("season_start") or "")
+    try:
+        opening = datetime.date.fromisoformat(season_iso)
+    except ValueError:
+        return None
+    days = (opening - today).days
+    if days > 56:
+        name = "Foundation"
+    elif days > 14:
+        name = "Ski prep"
+    elif days > 3:
+        name = "Sharpen"
+    elif days > 0:
+        name = "Taper"
+    elif days == 0:
+        name = "Opening day"
+    elif days > -150:
+        name = "In season"
+    else:
+        return None
+    return {"days": days, "phase": name, "text": SEASON_PHASES[name], "opening": opening.isoformat()}
+
+
+def theme_for(date, focus, goals=()):
     if focus == "strength":
         # position among the week's strength days, shifted each week so a weekday is not always the same group
         pos = STRENGTH_WEEKDAYS.index(date.weekday()) if date.weekday() in STRENGTH_WEEKDAYS else date.weekday() % 5
-        return THEMES[(pos + week_number(date)) % len(THEMES)]
+        theme = THEMES[(pos + week_number(date)) % len(THEMES)]
+        snow = {"skiing", "snowboarding"} & set(goals)
+        season = season_info(date) if snow else None
+        if season:
+            p = season["phase"]
+            if p in ("Ski prep", "Sharpen") and theme == "full":
+                theme = "legs"                       # a second leg day in the build-up
+            elif p in ("Taper", "Opening day") and theme in ("legs", "full"):
+                theme = "core"                       # no new leg load in opening week
+            elif p == "In season" and theme == "full":
+                theme = "hips"
+        return theme
     if focus == "cardio":
         return "core_add" if (date.weekday() // 2 + week_number(date)) % 2 == 0 else "mobility"
     return None
@@ -81,9 +127,17 @@ def day_plan(date, goals):
         elif day["focus"] == "cardio" and not day["cardio_type"]:
             base = _base(date, goals)
             day["cardio_type"] = base["cardio_type"] or _cardio_type("a", goals)
-    day["theme"] = theme_for(date, day["focus"])
+    day["theme"] = theme_for(date, day["focus"], goals)
     day["theme_label"] = THEME_LABELS.get(day["theme"]) if day["theme"] else None
     day["phase"] = phase(date)
+    snow = {"skiing", "snowboarding"} & set(goals)
+    season = season_info(date) if snow else None
+    day["season_phase"] = season["phase"] if season else None
+    # the last days before opening day are easy whatever the cycle says
+    if season and season["phase"] in ("Taper", "Opening day") and day["focus"] == "cardio":
+        day["theme"], day["theme_label"] = "mobility", THEME_LABELS["mobility"]
+    if season and season["phase"] == "Opening day" and not day.get("changed"):
+        day.update(focus="rest", cardio_type=None, cardio_minutes=None, theme=None, theme_label=None)
     return day
 
 

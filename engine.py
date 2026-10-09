@@ -58,10 +58,12 @@ THEME_SLOTS = {
 CARDIO_THEME_SLOTS = {"core_add": [("core", "Core activation")], "mobility": [("mobility", "Hip and spine mobility")]}
 
 
-def theme_slots(theme, goals):
+def theme_slots(theme, goals, season_phase=None):
     slots = list(THEME_SLOTS[theme])
     if theme == "legs" and SNOW_SPORTS & set(goals):
         slots[0] = ("legs", "Snow legs: quad endurance and control")
+        if season_phase in ("Ski prep", "Sharpen"):
+            slots.insert(1, ("balance", "Edge and balance control for the slopes"))
     return slots
 
 
@@ -92,7 +94,7 @@ class WorkoutEngine:
         self.db_path = db_path
 
     def generate_next_workout(self, last_log, today=None, library=None, equipment=None, goals=None,
-                              focus=None, cardio_type=None, theme=None):
+                              focus=None, cardio_type=None, theme=None, season_phase=None):
         """
         Dynamically builds the next workout based on active goals
         (skiing, snowboarding, triathlon) and current medical symptoms.
@@ -135,7 +137,7 @@ class WorkoutEngine:
             if ("snowboarding" in active_goals or "skiing" in active_goals) and theme in (None, "legs"):
                 # Inject lateral edge control and quad endurance (Zero spinal load) on leg days
                 workout_plan["strength"].extend(["Wall Sits (45s)", "Banded Lateral Walks", "Wall Tibialis Raises"])
-            slots = theme_slots(theme, active_goals) if theme in THEME_SLOTS else None
+            slots = theme_slots(theme, active_goals, season_phase) if theme in THEME_SLOTS else None
             self._add_accessories(workout_plan, library, equipment, today, recovery=False, slots=slots, seed=f"t{theme}")
 
         # --- CARDIO & TRIATHLON PROGRAMMING ---
