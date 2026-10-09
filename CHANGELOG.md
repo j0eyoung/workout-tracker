@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 - Second Sessions On Request
+
+### 🌟 Features
+* **"+ Add a second session" on the Today tab.** Choose a second strength session (a different muscle group from the first), core, mobility, or 20 minutes of easy cardio. Strength, core and mobility exercises are added to your list with sets you can log; extra cardio gets its own card.
+* The same safety checks as the coach's changes apply: nothing that is filtered out for your kidney or pelvic floor, nothing needing equipment you don't have, no second strength session on a recovery or rest day, and extra cardio is limited to 5 to 30 easy minutes.
+* The coach can also suggest a second cardio session, and you approve it with Apply.
+* "Undo them" on the Today tab removes added sessions and coach changes together.
 ## 0.6.0 - Ski and Snowboard Season Ramp-Up
 
 ### 🌟 Features

@@ -28,11 +28,12 @@ import planner
 import progression
 import tts
 from db import DB_PATH, get_last_log
+import engine as engine_mod
 from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -171,6 +172,7 @@ def plan():
         "strength": [with_progress(how_to(n, why.get(n)), last, phase) for n in w["strength"]],
         "cardio": {"text": w["cardio"], "minutes": w.get("cardio_minutes"), "note": w.get("cardio_note"),
                    "type": w.get("cardio_type"), "images": CARDIO_IMAGES.get(w.get("cardio_type"), [])},
+        "extra_cardio": w.get("extra_cardio"),
         "draft": {"tracker": [_page_row(r) for r in draft.get("tracker", [])], "checks": draft.get("checks", {})},
     }
 
@@ -316,6 +318,52 @@ def get_week(offset: int = 0):
 def reset_week():
     planner.clear_week(planner.monday(datetime.date.fromisoformat(history.local_today())))
     return {"ok": True}
+
+
+class SecondSession(BaseModel):
+    kind: str                # strength | core | mobility | cardio
+    minutes: int = 20
+
+
+@app.post("/api/plan/session2")
+def add_second_session(s: SecondSession):
+    """A second workout on request: built from the same safe library, checked like the coach's changes."""
+    lib = get_library()
+    equipment = library.selected_equipment()
+    today = datetime.date.fromisoformat(history.local_today())
+    plan = planedit.apply(_generate(today.isoformat()), planedit.overrides_for(today.isoformat()))
+    last = get_last_log()
+    pf = last.get("pelvic_floor_tightness") or 1
+    recovery = plan.get("cardio_type") == "recovery"
+    if s.kind not in ("strength", "core", "mobility", "cardio"):
+        raise HTTPException(400, "Choose strength, core, mobility or cardio.")
+    if recovery and s.kind == "strength":
+        return {"ok": False, "message": "Today is a recovery day, so a second strength session isn't added. Core, mobility or an easy walk work."}
+
+    changes = []
+    if s.kind == "cardio":
+        ctype = "swim" if ("triathlon" in selected_sports() and pf >= 7) else ("walk" if recovery or pf >= 7 else "bike")
+        changes.append({"op": "extra_cardio", "type": ctype, "minutes": max(5, min(s.minutes, 30)), "why": "easy, later in the day"})
+    else:
+        if s.kind == "strength":
+            used = planner.day_plan(today, selected_sports()).get("theme")
+            theme = next(t for t in ("legs", "back", "hips", "core") if t != used)
+            slots = engine_mod.theme_slots(theme, selected_sports())[:4]
+            label = {"legs": "legs", "back": "back and posture", "hips": "hips and balance", "core": "core"}[theme]
+        elif s.kind == "core":
+            slots = engine_mod.THEME_SLOTS["core"]
+            label = "core"
+        else:
+            slots = [("mobility", "Hip and spine mobility"), ("mobility", "Rib and pelvic mobility")]
+            label = "mobility"
+        picks = engine_mod.pick_accessories(lib["entries"], set(equipment) | {"bodyweight"}, today, recovery,
+                                            set(plan["strength"]), selected_sports(), slots=slots, seed="session2")
+        changes = [{"op": "add", "name": p["name"], "why": f"second session, {label}"} for p in picks]
+    allowed, rejected = planedit.validate({"changes": changes}, plan, lib["by_name"], equipment)
+    if allowed:
+        planedit.save(today.isoformat(), allowed)
+    return {"ok": bool(allowed), "added": len(allowed), "rejected": rejected,
+            "message": None if allowed else "Nothing safe could be added with your equipment."}
 
 
 @app.post("/api/plan/reset")

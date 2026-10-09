@@ -20,7 +20,8 @@ INSTRUCTIONS = (
     'one fenced block exactly like this (use only the operations you need):\n'
     '```plan-changes\n{"changes": [{"op": "add", "name": "Exercise name", "why": "short reason"}, '
     '{"op": "remove", "name": "Exercise name in today\'s plan"}, '
-    '{"op": "cardio", "type": "bike", "minutes": 25, "why": "short reason"}]}\n```\n'
+    '{"op": "cardio", "type": "bike", "minutes": 25, "why": "short reason"}, '
+    '{"op": "extra_cardio", "type": "walk", "minutes": 20, "why": "a second, easy session later in the day"}]}\n```\n'
     'To change a day in the weekly plan use {"op": "day", "date": "YYYY-MM-DD", "focus": "strength|cardio|recovery|rest", '
     '"type": "swim|bike|run|walk", "minutes": 30, "why": "short reason"} (type and minutes only for cardio days; dates from today '
     "to 13 days ahead; each week keeps at least one rest or recovery day and at most 5 strength days). "
@@ -105,6 +106,21 @@ def validate(data, plan, by_name, equipment):
                 rejected.append(f"Cardio can go up by at most 10 minutes at once (now {current}).")
             else:
                 allowed.append({"op": "cardio", "type": ctype, "minutes": minutes, "why": why})
+        elif kind == "extra_cardio":
+            ctype = op.get("type")
+            try:
+                minutes = int(op.get("minutes"))
+            except (TypeError, ValueError):
+                rejected.append("The second cardio session didn't have a number of minutes.")
+                continue
+            if ctype not in CARDIO_TEXT or ctype == "recovery":
+                rejected.append(f"'{ctype}' isn't a cardio type the app uses.")
+            elif recovery and ctype not in ("walk", "swim"):
+                rejected.append("Today is a recovery day, so a second cardio session can only be an easy walk or swim.")
+            elif not 5 <= minutes <= 30:
+                rejected.append("A second cardio session can be 5 to 30 minutes.")
+            else:
+                allowed.append({"op": "extra_cardio", "type": ctype, "minutes": minutes, "why": why})
         else:
             rejected.append("An unknown change was skipped.")
     return allowed, rejected
@@ -160,6 +176,8 @@ def label(c):
         d = datetime.date.fromisoformat(c["date"])
         extra = f" ({c['minutes']} min {c['type']})" if c["focus"] == "cardio" else ""
         return f"{d:%a %b %d}: {c['focus']}{extra}"
+    if c["op"] == "extra_cardio":
+        return f"Second session: {c['minutes']} min easy {c['type']}"
     if c["op"] == "add":
         return f"Add {c['name']}"
     if c["op"] == "remove":
@@ -198,6 +216,9 @@ def apply(workout, changes):
         elif c["op"] == "remove" and c["name"] in workout["strength"]:
             workout["strength"].remove(c["name"])
             workout["accessories"] = [a for a in workout.get("accessories", []) if a["name"] != c["name"]]
+        elif c["op"] == "extra_cardio":
+            workout["extra_cardio"] = {"type": c["type"], "minutes": c["minutes"], "text": CARDIO_TEXT[c["type"]],
+                                       "note": "Second session" + (f": {c['why']}" if c.get("why") else "")}
         elif c["op"] == "cardio":
             workout["cardio_type"], workout["cardio_minutes"] = c["type"], c["minutes"]
             workout["cardio"] = (f"{c['minutes']} min: {CARDIO_TEXT[c['type']]}. "

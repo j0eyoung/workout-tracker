@@ -57,7 +57,7 @@ const state = {
   ],
   coachBusy: false,
   mind: null, mindFilter: "all", mindQ: "",
-  week: null, weekOffset: 0, coachDraft: "",
+  week: null, weekOffset: 0, coachDraft: "", secondOpen: false,
   garmin: null, garminMsg: "",
   voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
@@ -229,7 +229,7 @@ function renderToday() {
   const cardio = p.cardio;
   const cardioText = (cardio.text || "").replace(/^\d+ min:\s*/, "");
   $view.innerHTML = `
-    ${p.coach_changes ? `<div class="small muted">Your coach changed today's plan. <button type="button" class="btn link small" data-act="reset-plan">Undo coach changes</button></div>` : ""}
+    ${p.coach_changes ? `<div class="small muted">Today's plan has added sessions or coach changes. <button type="button" class="btn link small" data-act="reset-plan">Undo them</button></div>` : ""}
     <h2>1. Daily non-negotiables</h2>
     ${p.warmup.map(warmupCard).join("")}
 
@@ -246,6 +246,16 @@ function renderToday() {
       ${pictures(cardio.images)}
     </div>
 
+    ${p.extra_cardio ? `<div class="card"><h3>Second session: easy ${esc(p.extra_cardio.type)}</h3>
+      <div class="minutes">${esc(p.extra_cardio.minutes)} <small>min</small></div>
+      <p class="sub">${esc(p.extra_cardio.text)}. Easy pace, later in the day.</p></div>` : ""}
+    <div class="card">
+      <button type="button" class="btn small" data-act="second-toggle">${state.secondOpen ? "Cancel" : "+ Add a second session"}</button>
+      ${state.secondOpen ? `<p class="sub" style="margin:10px 0 6px">What would you like to add today?</p>
+        <div class="chips wrap">${[["strength", "Strength (different group)"], ["core", "Core"], ["mobility", "Mobility"], ["cardio", "Easy cardio"]].map(([k, l]) =>
+          `<button type="button" class="chip" data-act="second-add" data-v="${k}">${l}</button>`).join("")}</div>
+        <p class="small muted" style="margin:8px 0 0">It uses your equipment and the same kidney and pelvic floor safety checks. Extra exercises appear in the strength list; extra cardio is 20 easy minutes.</p>` : ""}
+    </div>
     ${p.cooldown?.cards?.length ? `<h2>4. Cool-down <span class="muted">(optional)</span></h2>
     <p class="small muted" style="margin-top:0">${esc(p.cooldown.note)}</p>
     ${p.cooldown.cards.map(mindCard).join("")}` : ""}
@@ -989,6 +999,18 @@ const actions = {
     if (m) m.dismissed = true;
     store.set("coach", state.coach.slice(-50));
     renderCoach();
+  },
+  "second-toggle"() { state.secondOpen = !state.secondOpen; render(); },
+  async "second-add"(el) {
+    el.disabled = true;
+    try {
+      const r = await api("api/plan/session2", { method: "POST", body: JSON.stringify({ kind: el.dataset.v, minutes: 20 }) });
+      state.secondOpen = false;
+      if (saveTimer) await saveDraft();
+      await refreshPlan();
+      toast(r.ok ? `Second session added (${r.added})` : (r.message || "Couldn't add a second session"));
+      if (r.rejected?.length) toast(`Skipped: ${r.rejected[0]}`);
+    } catch { toast("Couldn't add a second session"); el.disabled = false; }
   },
   async "reset-plan"() {
     if (!confirm("Remove all of today's coach changes?")) return;
