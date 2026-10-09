@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.7 - Picture Test Tries Several Files
+
+### 🔧 Changes
+* The picture test now tries three different pictures and passes if any of them loads, instead of failing because one specific file is missing.
+* Added `tools/upload_yoga.py`, a script that uploads the yoga pictures to your bucket one at a time with retries (the Backblaze web uploader rate-limits large drags).
 ## 0.4.6 - Picture Test Shows What It Found
 
 ### 🔧 Changes

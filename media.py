@@ -57,8 +57,17 @@ _HINTS = {
 }
 
 
-def test(name="balasana-1.jpg"):
-    """Fetch one picture and say plainly what went wrong, if anything (never includes the keys)."""
+def test():
+    """Try a few pictures; passes if any loads. Otherwise says plainly what went wrong (never includes the keys)."""
+    result = None
+    for name in ("adho-mukha-svanasana-1.jpg", "balasana-1.jpg", "vrksasana-1.jpg"):
+        result = _test_one(name)
+        if result["ok"] or "found" not in result["message"].lower() and "Looked for" not in result["message"]:
+            return result  # worked, or a connection problem that more files won't change
+    return result
+
+
+def _test_one(name):
     s = settings()
     if not configured():
         missing = [k for k, v in (("endpoint", s["endpoint"]), ("bucket", s["bucket"]), ("access key", s["key"]),
