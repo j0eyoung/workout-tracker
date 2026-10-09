@@ -31,7 +31,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.4.4"
+VERSION = "0.4.5"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -306,6 +306,11 @@ def reset_week():
 def reset_changes():
     planedit.clear(history.local_today())
     return {"ok": True}
+
+
+@app.post("/api/media/test")
+def media_test():
+    return media.test()
 
 
 @app.get("/api/media/yoga/{name}")

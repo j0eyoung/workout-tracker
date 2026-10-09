@@ -46,6 +46,44 @@ def _s3(s):
     return _client["c"]
 
 
+_HINTS = {
+    "NoSuchBucket": "The bucket name wasn't found. Check the bucket name and the endpoint.",
+    "InvalidAccessKeyId": "The access key isn't recognised. Check the key ID and the endpoint region.",
+    "SignatureDoesNotMatch": "The secret key doesn't match the access key. Re-paste the secret.",
+    "AccessDenied": "The key has no permission to read this bucket or folder. Give the key read access to the bucket.",
+    "403": "The key has no permission to read this bucket or folder.",
+    "NoSuchKey": "Connected, but the picture wasn't found. Check the folder name and that the files are directly inside it.",
+    "404": "Connected, but the picture wasn't found. Check the folder name and that the files are directly inside it.",
+}
+
+
+def test(name="balasana-1.jpg"):
+    """Fetch one picture and say plainly what went wrong, if anything (never includes the keys)."""
+    s = settings()
+    if not configured():
+        missing = [k for k, v in (("endpoint", s["endpoint"]), ("bucket", s["bucket"]), ("access key", s["key"]),
+                                  ("secret key", s["secret"])) if not v]
+        return {"ok": False, "message": "Not set up yet. Missing: " + ", ".join(missing) + "."}
+    where = f"bucket '{s['bucket']}', folder '{s['prefix']}'"
+    try:
+        import boto3  # noqa: F401
+    except ImportError:
+        return {"ok": False, "message": "The storage library (boto3) isn't installed in this add-on image."}
+    path = os.path.join(CACHE_DIR, name)
+    try:
+        if os.path.exists(path):
+            os.remove(path)  # test against the bucket, not the cache
+        get(name)
+        return {"ok": True, "message": f"Working: fetched {name} from {where}."}
+    except FileNotFoundError:
+        return {"ok": False, "message": _HINTS["NoSuchKey"] + f" Looked for {s['prefix']}/{name} in {where}."}
+    except RuntimeError as e:
+        code = str(e)
+        return {"ok": False, "message": _HINTS.get(code, f"The storage service said: {code}.") + f" ({where})"}
+    except Exception as e:
+        return {"ok": False, "message": f"Couldn't reach the endpoint: {type(e).__name__}. Check the endpoint address."}
+
+
 def get(name):
     """Path of the cached picture, fetching it first if needed. Raises FileNotFoundError / RuntimeError."""
     if not NAME_RE.match(name):

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.5 - Test Your Picture Connection
+
+### 🌟 Features
+* **Test connection button** in Settings > Yoga pictures. It fetches one picture from your private bucket and tells you plainly what is wrong if it can't: wrong bucket name, wrong key or secret, a key without read access, the wrong folder, or an endpoint it can't reach. It never shows your keys.
+
+### 🔧 Changes
+* Settings now says "Private bucket details saved" until the test passes, instead of "connected" (it only meant the fields were filled in).
 ## 0.4.4 - Suggested Weights and Reps
 
 ### 🌟 Features

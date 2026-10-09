@@ -523,7 +523,9 @@ async function renderSettings() {
       <div class="row-actions"><button type="button" class="btn small" data-act="save-gear">Save gear details</button></div>
     </div>
     <h2>Yoga pictures</h2>
-    ${s.media_private ? `<div class="card"><h3>Private bucket connected</h3><p class="sub">Pictures load from your private Backblaze B2 bucket through this add-on.</p></div>`
+    ${s.media_private ? `<div class="card"><h3>Private bucket details saved</h3><p class="sub">Pictures load from your private bucket through this add-on. Tap the button to check that it really works.</p>
+      <div class="row-actions"><button type="button" class="btn small" data-act="media-test">Test connection</button></div>
+      <div id="media-test-result" class="small" style="margin-top:8px">${esc(state.mediaTest || "")}</div></div>`
     : `<div class="card">
       <p class="sub" style="margin:0 0 10px">For a private bucket, fill in the bucket settings (endpoint, name, key) in this add-on's Configuration tab, the same as for the Trading Terminal. Or, for a public folder, paste its address:</p>
       <label class="sub" for="media-url">Address of the folder holding the yoga pictures (starts with https://)</label>
@@ -855,6 +857,18 @@ const actions = {
     if (state.medScript && !state.medError) startAudio(state.medScript);
   },
   "goto-settings"() { history.replaceState(null, "", "#settings"); showTab("settings"); },
+  async "media-test"(el) {
+    el.disabled = true;
+    el.textContent = "Testing…";
+    try {
+      const r = await api("api/media/test", { method: "POST" });
+      state.mediaTest = (r.ok ? "✓ " : "✗ ") + r.message;
+    } catch { state.mediaTest = "✗ Couldn't reach the add-on."; }
+    el.disabled = false;
+    el.textContent = "Test connection";
+    const out = document.getElementById("media-test-result");
+    if (out) out.textContent = state.mediaTest;
+  },
   async "save-media"() {
     try {
       state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ media_base_url: document.getElementById("media-url").value }) });
