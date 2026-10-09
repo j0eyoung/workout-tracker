@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.6 - Picture Test Shows What It Found
+
+### 🔧 Changes
+* When the picture test can sign in but can't find a picture, it now lists how many pictures it found in your folder, whether any are in a subfolder, and an example file name, so a missing upload or a wrong folder is easy to spot.
 ## 0.4.5 - Test Your Picture Connection
 
 ### 🌟 Features

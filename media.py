@@ -76,7 +76,24 @@ def test(name="balasana-1.jpg"):
         get(name)
         return {"ok": True, "message": f"Working: fetched {name} from {where}."}
     except FileNotFoundError:
-        return {"ok": False, "message": _HINTS["NoSuchKey"] + f" Looked for {s['prefix']}/{name} in {where}."}
+        msg = _HINTS["NoSuchKey"] + f" Looked for {s['prefix']}/{name} in {where}."
+        try:  # show what IS there, to spot a missing file or an extra subfolder
+            listing = _s3(s).list_objects_v2(Bucket=s["bucket"], Prefix=s["prefix"] + "/", MaxKeys=1000)
+            keys = [o["Key"] for o in listing.get("Contents", [])]
+            jpgs = [k for k in keys if k.endswith(".jpg")]
+            direct = [k for k in jpgs if "/" not in k[len(s["prefix"]) + 1:]]
+            if not keys:
+                msg += " Nothing at all was found in that folder."
+            else:
+                msg += f" Found {len(jpgs)} .jpg files under it, {len(direct)} directly inside (expected 213)."
+                nested = [k for k in jpgs if k not in direct]
+                if nested:
+                    msg += f" Some are in a subfolder, e.g. {nested[0]}."
+                elif direct:
+                    msg += f" Example: {direct[0]}."
+        except Exception:
+            msg += " (The key can't list the folder, so I can't show what's inside.)"
+        return {"ok": False, "message": msg}
     except RuntimeError as e:
         code = str(e)
         return {"ok": False, "message": _HINTS.get(code, f"The storage service said: {code}.") + f" ({where})"}
