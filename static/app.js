@@ -190,10 +190,12 @@ function strengthCard(ex) {
 
 function setRow(name, s, i) {
   const attrs = `data-name="${esc(name)}" data-i="${i}"`;
-  return `<div class="set">
+  // Bodyweight moves, bands and the like only track reps; your own added exercises keep the weight box
+  const weighted = exerciseFor(name).weighted !== false;
+  return `<div class="set${weighted ? "" : " noweight"}">
     <button type="button" class="done${s.done ? " on" : ""}" data-act="done" ${attrs} aria-pressed="${s.done}" aria-label="Set ${i + 1} done">✓</button>
     <span class="n">${i + 1}</span>
-    <label><input type="number" inputmode="decimal" min="0" step="2.5" value="${esc(s.weight)}" data-field="weight" ${attrs} aria-label="Set ${i + 1} weight in pounds"><span class="unit">lbs</span></label>
+    ${weighted ? `<label><input type="number" inputmode="decimal" min="0" step="2.5" value="${esc(s.weight)}" data-field="weight" ${attrs} aria-label="Set ${i + 1} weight in pounds"><span class="unit">lbs</span></label>` : ""}
     <label><input type="number" inputmode="numeric" min="0" step="1" value="${esc(s.reps)}" data-field="reps" ${attrs} aria-label="Set ${i + 1} reps"><span class="unit">reps</span></label>
     <button type="button" class="remove" data-act="remove-set" ${attrs} aria-label="Remove set ${i + 1}">×</button>
   </div>`;

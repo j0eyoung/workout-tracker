@@ -33,7 +33,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.6.3"
+VERSION = "0.6.4"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -64,7 +64,13 @@ def library_card(e, why=None):
         "Filtered out of your plans: " + "; ".join(library.FLAG_REASONS.get(f, f) for f in e["constraint_tags"]) + ".",
         "muscles": e["muscles"], "equipment": e["equipment"], "level": e["level"],
         "sources": [library.SOURCE_NAMES.get(s, s) for s in e["sources"]],
+        "weighted": e["equipment"] not in WEIGHTLESS_EQUIPMENT,
     }
+
+
+# Equipment where you don't track pounds: bodyweight, bands (tension, not lbs), rings, sliders, and so on
+WEIGHTLESS_EQUIPMENT = {"bodyweight", "bands", "stability ball", "foam roller", "pull-up bar", "suspension trainer",
+                        "sliders", "rings", "cardio machine"}
 
 
 def how_to(name, why=None):
@@ -73,7 +79,7 @@ def how_to(name, why=None):
     if guide:
         return {"name": name, "dose": guide["dose"], "sets": guide.get("sets", 3), "why": why,
                 "images": guide.get("images", []), "image_note": guide.get("image_note"),
-                "steps": guide["cues"], "tips": [], "safe": True, "warning": None}
+                "steps": guide["cues"], "tips": [], "safe": True, "warning": None, "weighted": False}
     entry = get_library()["by_name"].get(name)
     if entry:
         return library_card(entry, why)

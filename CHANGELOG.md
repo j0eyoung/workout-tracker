@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.4 - No Weight Box For Bodyweight Moves
+
+### 🔧 Changes
+* **Bodyweight exercises only track reps.** The pounds box is gone for bodyweight moves, bands, rings, sliders, foam rolling and the like, and for your daily non-negotiables such as wall sits and heel slides. Weighted exercises (dumbbells, kettlebells, cables, machines, barbells) and exercises you add yourself keep it.
 ## 0.6.3 - More Yoga Pictures
 
 ### 🌟 Features

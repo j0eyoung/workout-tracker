@@ -97,6 +97,7 @@ h2:first-child { margin-top: 6px; }
 /* Set rows: tick, set number, lbs, reps, remove */
 .sets { margin-top: 10px; display: grid; gap: 8px; }
 .set { display: grid; grid-template-columns: 44px 30px 1fr 1fr 36px; gap: 8px; align-items: center; }
+.set.noweight { grid-template-columns: 44px 30px 1fr 36px; }
 .set .done {
   height: 44px; border-radius: 10px; border: 2px solid var(--muted); background: none;
   font-weight: 800; color: transparent; cursor: pointer;
