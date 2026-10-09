@@ -729,7 +729,7 @@ async function renderMindBody() {
     </div>
     ${yoga.length ? yoga.map(mindCard).join("") : `<div class="empty">No poses match.</div>`}
     ${m.media_base ? "" : `<p class="small muted">Pictures are off: set the media address in Settings.</p>`}
-    <footer class="credits">Yoga pictures: Yoga Posture Dataset on Kaggle (CC0). General wellness guidance, not medical advice.</footer>`;
+    <footer class="credits">Yoga pictures: Yoga Posture Dataset on Kaggle (CC0). ${esc(m.qigong_credit || "")} General wellness guidance, not medical advice.</footer>`;
 }
 
 // --- Library ----------------------------------------------------------------------------------

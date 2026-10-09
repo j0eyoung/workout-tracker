@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 - Qigong Pictures
+
+### 🌟 Features
+* **Pictures for the Baduanjin qigong moves** (7 of the 8 so far), from freely licensed photos by Alexander Callegari on Wikimedia Commons (CC BY-SA 3.0 de, resized). They are bundled in the add-on, so there is nothing to set up.
+* Where your kidney-safe version differs from the traditional movement (looking back, the sway, the forward fold), the card says so under the picture.
 ## 0.5.0 - Garmin Connected From Inside the App
 
 ### 🌟 Features

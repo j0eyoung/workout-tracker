@@ -3,6 +3,8 @@ exercise library (api.library_card). Written for Joe's constraints: left kidney 
 (no deep twists, deep backbends, compression or inversion-type loading in automatic picks) and a
 hypertonic pelvic floor (nothing that makes him grip or bear down; long slow exhales).
 General wellness guidance, not medical advice. Pictures: Yoga Posture Dataset on Kaggle by Mrinal Tyagi, CC0."""
+import os
+
 import library
 
 PHOTO_SOURCE = "Yoga Posture Dataset (Kaggle, CC0)"
@@ -413,16 +415,30 @@ QIGONG = [
 ]
 
 
-def _qigong_card(name, steps, tip):
+QIGONG_CREDIT = "Baduanjin photos: Alexander Callegari, CC BY-SA 3.0 de, via Wikimedia Commons (resized)."
+# Pictures show the traditional movement; these moves are done differently here for the left kidney
+_QIGONG_NOTES = {
+    4: "The picture shows the traditional full turn. Your version turns the head only, hips and chest facing forward.",
+    5: "The picture shows a deep side bend. Your version is a small, loose sway only.",
+    6: "The picture shows the full fold. Fold only as far as is comfortable, and skip any backward arch.",
+}
+
+
+def _qigong_card(name, steps, tip, n=0):
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "qigong", f"{n}.jpg")
+    images = [f"static/qigong/{n}.jpg"] if n and os.path.exists(path) else []
     return {
-        "name": name, "dose": "6-8 slow repeats", "sets": 1, "why": None, "images": [], "gallery": [], "image_note": None,
+        "name": name, "dose": "6-8 slow repeats", "sets": 1, "why": None, "images": images, "gallery": images,
+        "image_note": _QIGONG_NOTES.get(n) if images else None,
         "steps": steps + [BREATH], "tips": [tip], "safe": True, "warning": None, "muscles": ["whole body"],
-        "equipment": "bodyweight", "level": "beginner", "sources": ["Baduanjin qigong"], "category": "qigong", "cooldown": True,
+        "equipment": "bodyweight", "level": "beginner", "sources": ["Baduanjin qigong"] + (["Photo: A. Callegari, CC BY-SA 3.0 de"] if images else []),
+        "category": "qigong", "cooldown": True,
     }
 
 
 def cards():
-    return {"yoga": [_yoga_card(p) for p in YOGA], "qigong": [_qigong_card(*q) for q in QIGONG], "media_base": media_base()}
+    return {"yoga": [_yoga_card(p) for p in YOGA], "qigong": [_qigong_card(*q, n=i) for i, q in enumerate(QIGONG, 1)],
+            "media_base": media_base(), "qigong_credit": QIGONG_CREDIT}
 
 
 def cooldown(kidney=0, pelvic_floor=0, minutes=8):
