@@ -431,12 +431,14 @@ async function renderWeek() {
       <button type="button" class="btn small" data-act="week-nav" data-v="1" ${off === 1 ? "disabled" : ""}>Next week</button>
     </div>
     <p class="small muted" style="margin:0 0 8px">${esc(range)} · <strong>${esc(w.phase)}</strong></p>
+    ${w.replan ? `<div class="card season"><strong>You skipped a day, so I re-planned the week</strong>
+      <div class="sub">Moved up: ${esc(w.replan.missed.join(", "))}.${w.replan.dropped.length ? ` Left out to keep your rest day: ${esc(w.replan.dropped.join(", "))}.` : ""}</div></div>` : ""}
     ${w.season ? `<div class="card season"><strong>${esc(w.season.phase)}</strong>${w.season.days > 0 ? ` · ${w.season.days} day${w.season.days === 1 ? "" : "s"} to opening day` : ""}
       <div class="sub">${esc(w.season.text)}</div></div>` : ""}
     ${w.days.map((d) => `<div class="card week-day ${d.status}">
       <div class="week-head"><strong>${esc(d.weekday)}</strong> <span class="muted">${esc(formatDate(d.date))}</span>
         <span class="badge">${esc(d.label)}</span>${badge[d.status] ? `<span class="badge${d.status === "missed" ? " bad" : ""}">${badge[d.status]}</span>` : ""}</div>
-      ${d.theme_label ? `<div class="sub">${esc(d.focus === "cardio" ? "Cardio " : "")}${esc(d.theme_label)}</div>` : ""}
+      ${d.theme_label ? `<div class="sub">${esc(d.focus === "cardio" ? "Cardio " : "")}${esc(d.theme_label)}${d.replanned ? " · moved up after a skipped day" : ""}</div>` : ""}
       ${d.cardio_text && d.focus === "cardio" ? `<div><strong>${esc(d.cardio_text)}</strong>${d.long ? " (long and easy)" : ""}</div>` : ""}
       ${d.strength?.length ? `<div class="sub">${esc(d.strength.slice(0, 6).join(", "))}${d.strength.length > 6 ? "…" : ""}</div>` : ""}
       <div class="small muted">${esc(d.mind)}</div>

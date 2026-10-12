@@ -33,7 +33,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.6.4"
+VERSION = "0.7.0"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -323,8 +323,13 @@ def get_week(offset: int = 0):
     today = datetime.date.fromisoformat(history.local_today())
     start = planner.monday(today) + datetime.timedelta(days=7 * max(-1, min(offset, 2)))
     goals = selected_sports()
-    done = {w["date"] for w in history.get_history(DB_PATH, 60)}
+    done = {w["date"] for w in history.get_history(DB_PATH, 60) if (w.get("workout") or {}).get("session") != 2}
     days = planner.week(start, today, goals, done)
+    rp = planner.replan_map(goals) if offset == 0 else {}
+    replan = None
+    if rp:
+        names = {"core": "core activation", "legs": "legs", "back": "back and posture", "hips": "hips and balance", "full": "full body"}
+        replan = {"missed": [names[t] for t in rp["missed"]], "dropped": [names[t] for t in rp["dropped"]]}
     for day in days:
         if day["status"] in ("today", "upcoming") and day["focus"] in ("strength", "cardio"):
             w = _generate(day["date"])
@@ -338,7 +343,7 @@ def get_week(offset: int = 0):
         except ValueError:
             pass
     return {"start": start.isoformat(), "offset": offset, "days": days, "sports": goals, "phase": planner.phase(start),
-            "season": _season(today),
+            "season": _season(today), "replan": replan,
             "season_start": season, "weeks_to_season": weeks_left}
 
 
@@ -398,6 +403,14 @@ def add_second_session(s: SecondSession):
 def reset_changes():
     planedit.clear(history.local_today())
     return {"ok": True}
+
+
+def _logged_dates():
+    """Dates with a logged first session (a second session on its own doesn't count as that day's workout)."""
+    return {w["date"] for w in history.get_history(DB_PATH, 30) if (w.get("workout") or {}).get("session") != 2}
+
+
+planner.set_context(lambda: datetime.date.fromisoformat(history.local_today()), _logged_dates)
 
 
 @app.on_event("startup")

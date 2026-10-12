@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 - The Week Adapts When You Skip A Day
+
+### 🌟 Features
+* **Skip a strength day and the rest of the week is re-planned.** A strength day that passes without a logged workout is moved into the strength days you still have this week. Core activation goes first, then legs, back, hips and full body.
+* **Your rest day stays, and so does the 5-strength-day limit.** If there isn't room for everything, the lowest-priority group is left out, and the Week tab tells you which group was moved up and which one was left out.
+* Today's workout follows the new plan, and the coach sees it too. The re-plan only covers the current week, and it is switched off in opening week before the snow season so the taper isn't disturbed.
+* A second session logged on its own doesn't count as that day's workout.
 ## 0.6.4 - No Weight Box For Bodyweight Moves
 
 ### 🔧 Changes

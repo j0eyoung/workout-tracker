@@ -4,6 +4,7 @@ your recent symptoms. Today's real workout still adapts to how you feel; the wee
 Pattern (Mon-Sun): strength, cardio, strength (lighter), cardio, strength, long easy cardio, rest. The coach can move
 things around; changes are saved per date in settings.json."""
 import datetime
+import time
 
 import library
 
@@ -115,8 +116,82 @@ def overrides():
     return library.load_settings().get("week_overrides") or {}
 
 
+# --- Skipped days: the rest of this week is re-planned ----------------------------------------------------------
+
+THEME_PRIORITY = ["core", "legs", "back", "hips", "full"]   # core activation first: it is the weakest area
+_ctx = {"today": None, "done": None, "cache": (0.0, None, None)}
+
+
+def set_context(today_fn, done_fn):
+    """The app tells the planner what 'today' is and which dates have a logged workout."""
+    _ctx["today"], _ctx["done"] = today_fn, done_fn
+
+
+def replan_map(goals):
+    """{"themes": {date: theme}, "missed": [...], "dropped": [...]} for this week, or {} when nothing was skipped.
+
+    Strength days that passed without a logged workout are moved into the strength days still ahead (this week only),
+    core first. A week keeps its rest day and its 5-strength-day limit, so if there is no room the lowest-priority
+    group is dropped. Opening week (taper) is left alone."""
+    if not _ctx["today"]:
+        return {}
+    now = time.time()
+    stamp, key, cached = _ctx["cache"]
+    today = _ctx["today"]()
+    k = (today.isoformat(), tuple(goals))
+    if key == k and now - stamp < 5:
+        return cached
+    result = _replan(today, goals)
+    _ctx["cache"] = (now, k, result)
+    return result
+
+
+def _replan(today, goals):
+    snow = {"skiing", "snowboarding"} & set(goals)
+    season = season_info(today) if snow else None
+    if season and season["phase"] in ("Taper", "Opening day"):
+        return {}
+    done = _ctx["done"]()
+    start = monday(today)
+    missed, upcoming = [], []
+    for i in range(7):
+        d = start + datetime.timedelta(days=i)
+        day = _day_plan_base(d, goals)
+        if day["focus"] != "strength":
+            continue
+        if d < today:
+            if d.isoformat() not in done:
+                missed.append(day["theme"])
+        elif d.isoformat() not in done and not day.get("changed"):
+            upcoming.append((d, day["theme"]))
+    if not missed or not upcoming:
+        return {}
+    first = [t for t in THEME_PRIORITY if t in missed][:len(upcoming)]
+    original = [t for _, t in upcoming]
+    room = len(upcoming) - len(first)
+    rest = [t for t in original if t not in first]
+    # when there is no room for everything, the lowest-priority groups are the ones left out
+    kept = set(sorted(rest, key=THEME_PRIORITY.index)[:room])
+    order = first + [t for t in rest if t in kept]
+    dropped = [t for t in THEME_PRIORITY if (t in missed or t in original) and t not in order]
+    themes = {d.isoformat(): order[i] for i, (d, _) in enumerate(upcoming)}
+    return {"themes": themes, "missed": first, "dropped": dropped}
+
+
 def day_plan(date, goals):
-    """Plan for one date: the pattern plus any change the coach made (and you approved)."""
+    """Plan for one date: the pattern, any change the coach made, and the re-plan after a skipped day."""
+    day = _day_plan_base(date, goals)
+    if day["focus"] == "strength":
+        rp = replan_map(goals)
+        theme = (rp.get("themes") or {}).get(date.isoformat())
+        if theme and theme != day["theme"]:
+            day["theme"], day["theme_label"] = theme, THEME_LABELS[theme]
+            day["replanned"] = True
+    return day
+
+
+def _day_plan_base(date, goals):
+    """Plan for one date without the skipped-day re-plan."""
     day = _base(date, goals)
     ov = overrides().get(date.isoformat())
     if ov:
