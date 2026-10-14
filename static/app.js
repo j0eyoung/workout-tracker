@@ -561,6 +561,91 @@ $timer.addEventListener("click", (e) => {
   else if (act === "done") stopTimer(true, Math.max(1, Math.round((Date.now() - timer.start) / 1000)));
 });
 
+// --- Guided qigong: one spoken audio file, the picture follows the voice ---------------------------------------------
+
+const $qg = document.getElementById("qg");
+const qg = { key: null, steps: [], timeline: [], poll: null, current: -1, lock: null };
+
+async function startQigong(seconds) {
+  clearTimeout(qg.poll);
+  showQg(`<div class="qg-wait"><h3>Guided Baduanjin</h3><p id="qg-status" class="sub">Getting the voice ready…</p>
+    <button type="button" class="btn small" data-qg="close">Cancel</button></div>`);
+  try {
+    const r = await api("api/qigong/session", { method: "POST", body: JSON.stringify({ voice: state.voice || "lessac", seconds }) });
+    qg.key = r.key;
+    qg.steps = r.steps;
+    pollQigong(r);
+  } catch { showQg(`<div class="qg-wait"><p>Couldn't start the session.</p><button type="button" class="btn small" data-qg="close">Close</button></div>`); }
+}
+
+function pollQigong(job) {
+  const el = document.getElementById("qg-status");
+  if (job.status === "error") {
+    if (el) el.textContent = `Couldn't make the audio (${job.error || "unknown error"}).`;
+    return;
+  }
+  if (job.status === "ready") return playQigong();
+  if (el) el.textContent = job.status === "speaking" ? `Preparing the voice… ${Math.round((job.progress || 0) * 100)}% (first time only)`
+    : "Getting the voice ready… (a new voice downloads the first time)";
+  qg.poll = setTimeout(async () => {
+    try { pollQigong(await api(`api/tts/${qg.key}`)); } catch { if (el) el.textContent = "Lost connection."; }
+  }, 1500);
+}
+
+async function playQigong() {
+  try { qg.timeline = (await api(`api/tts/${qg.key}/timeline`)).timeline; } catch { qg.timeline = []; }
+  qg.current = -1;
+  showQg(`<div class="qg-stage" id="qg-stage"></div>
+    <audio id="qg-audio" controls autoplay src="api/tts/${esc(qg.key)}/audio" style="width:100%"></audio>
+    <div class="row-actions" style="justify-content:space-between">
+      <button type="button" class="btn small" data-qg="prev">◀ Back</button>
+      <button type="button" class="btn small" data-qg="next">Next ▶</button>
+      <button type="button" class="btn small" data-qg="close">Close</button></div>`);
+  const audio = document.getElementById("qg-audio");
+  audio.addEventListener("timeupdate", () => drawQigong(audio.currentTime));
+  audio.addEventListener("play", async () => { try { qg.lock = await navigator.wakeLock?.request("screen"); } catch { /* not allowed */ } });
+  audio.addEventListener("ended", () => { qg.lock?.release(); toast("Session complete 🙏"); });
+  drawQigong(0);
+}
+
+function drawQigong(t) {
+  const i = Math.max(0, qg.timeline.findIndex((s) => t >= s.start && t < s.end));
+  if (i === qg.current) return;
+  qg.current = i;
+  const step = qg.steps[i] || {};
+  const moves = qg.steps.length - 2;
+  const label = i === 0 ? "Getting ready" : i > moves ? "Finish" : `Move ${i} of ${moves}`;
+  const stage = document.getElementById("qg-stage");
+  if (stage) {
+    stage.innerHTML = `<div class="small muted">${esc(label)}</div><h3 style="margin:4px 0 10px">${esc(step.name || "")}</h3>
+      ${step.image ? `<img src="${esc(step.image)}" alt="${esc(step.name || "")}">` : `<div class="qg-breathe">🫁</div>`}
+      ${step.note ? `<p class="sub">${esc(step.note)}</p>` : ""}`;
+  }
+}
+
+function showQg(html) {
+  $qg.innerHTML = `<div class="qg-inner">${html}</div>`;
+  $qg.hidden = false;
+}
+
+$qg.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-qg]");
+  if (!b) return;
+  const audio = document.getElementById("qg-audio");
+  const act = b.dataset.qg;
+  if (act === "close") {
+    clearTimeout(qg.poll);
+    audio?.pause();
+    qg.lock?.release();
+    $qg.hidden = true;
+    $qg.innerHTML = "";
+  } else if (audio && qg.timeline.length) {
+    const target = Math.min(qg.timeline.length - 1, Math.max(0, qg.current + (act === "next" ? 1 : -1)));
+    audio.currentTime = qg.timeline[target].start + 0.05;
+    drawQigong(audio.currentTime);
+  }
+});
+
 // --- Week -------------------------------------------------------------------------------------
 
 async function renderWeek() {
@@ -957,6 +1042,12 @@ async function renderMindBody() {
   $view.innerHTML = `
     ${meditationSection()}
     <h2>Qigong</h2>
+    <div class="card">
+      <h3>Guided Baduanjin session</h3>
+      <p class="sub">All eight moves in their kidney-safe form, read by your chosen voice with time to do each one, and the picture follows along. About 8 to 14 minutes depending on the pace you pick.</p>
+      <div class="chips wrap">${[[30, "30 s per move"], [45, "45 s per move"], [60, "60 s per move"]].map(([s, l]) =>
+        `<button type="button" class="chip" data-act="qigong-start" data-v="${s}">▶ ${l}</button>`).join("")}</div>
+    </div>
     <p class="small muted" style="margin-top:0">Baduanjin (eight pieces of brocade), adjusted for your kidney: head-only turns, hips square, folds only as far as is comfortable.</p>
     ${m.qigong.map(mindCard).join("")}
     <h2>Yoga</h2>
@@ -1135,6 +1226,10 @@ const actions = {
     await refreshPlan();
     render();
     toast("Back to the usual week");
+  },
+  "qigong-start"(el) {
+    if (!state.voice && state.voices?.selected) state.voice = state.voices.selected;
+    startQigong(Number(el.dataset.v));
   },
   "mind-filter"(el) { state.mindFilter = el.dataset.v; render(); },
   "med-filter"(el) { state.medFilter = el.dataset.v; state.medShown = 10; render(); },

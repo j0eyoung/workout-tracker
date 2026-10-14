@@ -455,6 +455,21 @@ _QIGONG_NOTES = {
 }
 
 
+def qigong_session(seconds_per_move=45):
+    """Spoken script for a guided Baduanjin session: a short intro, each move with its kidney-safe cue and quiet time
+    to do it, and a breathing finish. Returns segments for tts.start_session and the matching cards."""
+    cards_ = [_qigong_card(*q, n=i) for i, q in enumerate(QIGONG, 1)]
+    segments = [{"text": "Welcome to your Baduanjin practice. Stand with your feet shoulder-width apart, knees soft, "
+                         "belly soft. Breathe slowly through your nose, with long, easy exhales.", "hold": 8}]
+    for i, (name, steps, tip) in enumerate(QIGONG, 1):
+        title = name.split(":", 1)[1].strip()
+        segments.append({"text": f"Move {i}. {title}. " + " ".join(steps) + f" {tip} Begin now, slowly, with your breath.",
+                         "hold": seconds_per_move})
+    segments.append({"text": "Well done. Let your arms hang. Close your eyes if you like, and take a few slow breaths, "
+                             "letting each exhale be a little longer than the inhale.", "hold": 30})
+    return segments, cards_
+
+
 def _qigong_card(name, steps, tip, n=0):
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "qigong", f"{n}.jpg")
     images = [f"static/qigong/{n}.jpg"] if n and os.path.exists(path) else []

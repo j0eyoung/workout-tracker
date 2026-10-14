@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.4 - Guided Qigong Session
+
+### 🌟 Features
+* **Guided Baduanjin session** in Mind & Body > Qigong. Pick 30, 45 or 60 seconds per move and press play: your chosen voice introduces each of the eight moves with its kidney-safe cues, then gives you quiet time to do it, and finishes with a short breathing practice.
+* **The picture follows along.** The player shows the photo of the move being described, "Move 3 of 8", and the kidney-safe note where the photo shows the traditional version. Back and Next jump between moves, and the screen stays on while it plays.
+* The first time for each voice and pace, the add-on prepares the audio (a few minutes on the Green); after that it starts straight away.
 ## 0.9.3 - Garmin Lighter Days (Off by Default)
 
 ### 🌟 Features

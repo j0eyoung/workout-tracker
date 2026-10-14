@@ -4,6 +4,7 @@ Each voice is a ~60 MB model, downloaded the first time it is chosen into /data/
 image, so the Green's small disk only holds the voices you actually use). Finished audio is cached in
 /data/tts-cache, so a session you replay is instant. Models: huggingface.co/rhasspy/piper-voices (MIT)."""
 import hashlib
+import json
 import os
 import re
 import threading
@@ -115,6 +116,68 @@ def start(voice_id, text):
         job = _jobs[key] = {"key": key, "status": "queued", "progress": 0, "path": path}
     threading.Thread(target=_make, args=(job, voice_id, text), daemon=True).start()
     return job
+
+
+def _make_session(job, voice_id, segments):
+    """A guided session as one audio file: each segment is spoken, then followed by `hold` seconds of quiet time to
+    do the movement. The start and end of every segment is saved so the page can show the matching picture."""
+    try:
+        from piper import SynthesisConfig
+        job["status"] = "loading"
+        voice = _load(voice_id)
+        cfg = SynthesisConfig(length_scale=1.2, noise_scale=0.6, noise_w_scale=0.7)
+        sr = voice.config.sample_rate
+        os.makedirs(AUDIO_DIR, exist_ok=True)
+        tmp = job["path"] + ".tmp"
+        timeline, frames = [], 0
+        job["status"] = "speaking"
+        with wave.open(tmp, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            for i, seg in enumerate(segments):
+                start = frames / sr
+                for chunk in voice.synthesize(seg["text"], syn_config=cfg):
+                    w.writeframes(chunk.audio_int16_bytes)
+                    frames += len(chunk.audio_int16_bytes) // 2
+                quiet = int(sr * (seg.get("hold", 0) + 1.5))
+                w.writeframes(b"\x00\x00" * quiet)
+                frames += quiet
+                timeline.append({"index": i, "start": round(start, 2), "end": round(frames / sr, 2)})
+                job["progress"] = round((i + 1) / len(segments), 2)
+        os.replace(tmp, job["path"])
+        with open(job["path"][:-4] + ".json", "w", encoding="utf-8") as f:
+            json.dump(timeline, f)
+        job["status"] = "ready"
+    except Exception as e:
+        job["status"] = "error"
+        job["error"] = f"{type(e).__name__}: {str(e)[:160]}"
+
+
+def start_session(voice_id, segments):
+    """Start (or find) a guided session's audio. Same job and status calls as start()."""
+    if voice_id not in VOICES:
+        voice_id = DEFAULT_VOICE
+    key = hashlib.sha1(f"session\n{voice_id}\n{json.dumps(segments, sort_keys=True)}".encode()).hexdigest()[:16]
+    path = os.path.join(AUDIO_DIR, f"{key}.wav")
+    with _lock:
+        job = _jobs.get(key)
+        if job and job["status"] in ("queued", "loading", "speaking"):
+            return job
+        if os.path.exists(path) and os.path.exists(path[:-4] + ".json"):
+            job = _jobs[key] = {"key": key, "status": "ready", "progress": 1, "path": path}
+            return job
+        job = _jobs[key] = {"key": key, "status": "queued", "progress": 0, "path": path}
+    threading.Thread(target=_make_session, args=(job, voice_id, segments), daemon=True).start()
+    return job
+
+
+def timeline(key):
+    path = os.path.join(AUDIO_DIR, f"{key}.json")
+    if not _KEY_RE.match(key) or not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def status(key):

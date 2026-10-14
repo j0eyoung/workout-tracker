@@ -37,7 +37,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.9.3"
+VERSION = "0.9.4"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -913,6 +913,30 @@ def make_audio(r: TTSRequest):
     if not text:
         raise HTTPException(400, "Nothing to read")
     return tts.public(tts.start(r.voice, text))
+
+
+class QigongSession(BaseModel):
+    voice: str = tts.DEFAULT_VOICE
+    seconds: int = 45      # quiet time per move
+
+
+@app.post("/api/qigong/session")
+def qigong_session(q: QigongSession):
+    """A guided Baduanjin session spoken by your chosen voice, as one audio file with a timeline of the moves."""
+    segments, cards = mindbody.qigong_session(max(20, min(q.seconds, 120)))
+    job = tts.start_session(q.voice, segments)
+    steps = [{"name": "Getting ready", "image": None}] + \
+        [{"name": c["name"], "image": (c["images"] or [None])[0], "note": c.get("image_note")} for c in cards] + \
+        [{"name": "Breathing to finish", "image": None}]
+    return {**tts.public(job), "steps": steps}
+
+
+@app.get("/api/tts/{key}/timeline")
+def audio_timeline(key: str):
+    t = tts.timeline(key)
+    if t is None:
+        raise HTTPException(404, "No timeline")
+    return {"timeline": t}
 
 
 @app.get("/api/tts/{key}")
