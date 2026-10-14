@@ -37,7 +37,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.9.2"
+VERSION = "0.9.3"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -187,6 +187,14 @@ def _drop_paused(ops):
     return kept, why
 
 
+def garmin_today(date_iso=None):
+    """Garmin-driven lighter day for today, if the switch is on in Settings (it is off by default)."""
+    today = history.local_today()
+    if (date_iso or today) != today or not library.load_settings().get("garmin_adjust"):
+        return {"level": None, "reasons": []}
+    return garmin_sync.recovery_signal(today)
+
+
 def _generate(date_iso):
     """The engine's workout for a date, following that day's place in the weekly plan."""
     goals = selected_sports()
@@ -194,10 +202,22 @@ def _generate(date_iso):
     day = planner.day_plan(d, goals)
     resting = paused(date_iso)
     entries = [e for e in get_library()["entries"] if e["name"] not in resting]
+    gsig = garmin_today(date_iso)
+    focus = "recovery" if gsig["level"] == "recovery" and day["focus"] in ("strength", "cardio") else day["focus"]
     w = engine.generate_next_workout(
         current_log(date_iso), today=d, library=entries, equipment=library.selected_equipment(),
-        goals=goals, focus=day["focus"], cardio_type=day["cardio_type"], theme=day["theme"],
+        goals=goals, focus=focus, cardio_type=day["cardio_type"], theme=day["theme"],
         season_phase=day.get("season_phase"))
+    if gsig["level"] == "lighter" and w.get("cardio_type") != "recovery":
+        # Garmin says go lighter: one fewer extra and about a quarter less cardio
+        if w.get("accessories"):
+            last = w["accessories"].pop()
+            if last["name"] in w["strength"]:
+                w["strength"].remove(last["name"])
+        if w.get("cardio_minutes"):
+            w = planedit.apply(w, [{"op": "cardio", "type": w["cardio_type"],
+                                    "minutes": max(10, int(w["cardio_minutes"] * 0.75 / 5) * 5),
+                                    "why": "lighter day from your Garmin data"}])
     if resting:   # the fixed exercises (wall sits and so on) sit out too
         w["strength"] = [n for n in w["strength"] if n not in resting]
         w["accessories"] = [a for a in w.get("accessories", []) if a["name"] not in resting]
@@ -274,7 +294,11 @@ def plan():
     season = _season(datetime.date.fromisoformat(today))
     if season and season["phase"] in ("Taper", "Opening day"):
         phase = "Easy week"          # opening week: hold loads, one set fewer
+    gsig = garmin_today(today)
+    if gsig["level"]:
+        phase = "Easy week"          # Garmin says go lighter: hold loads, one set fewer
     return {
+        "garmin": gsig,
         "season": season,
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
@@ -915,10 +939,12 @@ def get_settings():
             "season_start": library.load_settings().get("season_start", ""),
             "paused": [{"name": n, "since": p["since"], "until": p["until"]} for n, p in sorted(paused().items())],
             "machines": readiness.status() if "triathlon" not in selected_sports() else None,
-            "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)}
+            "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES),
+            "garmin_adjust": bool(library.load_settings().get("garmin_adjust", False))}
 
 
 class Settings(BaseModel):
+    garmin_adjust: bool | None = None
     equipment: list[str] | None = None
     gear_notes: str | None = None
     media_base_url: str | None = None
@@ -935,6 +961,8 @@ def put_settings(s: Settings):
         patch["equipment"] = sorted({e for e in s.equipment if e in library.EQUIPMENT_OPTIONS} | {"bodyweight"})
     if s.gear_notes is not None:
         patch["gear_notes"] = s.gear_notes.strip()[:2000]
+    if s.garmin_adjust is not None:
+        patch["garmin_adjust"] = s.garmin_adjust
     if s.sports is not None:
         patch["sports"] = [x for x, _ in SPORT_OPTIONS if x in s.sports]
     if s.season_start is not None:

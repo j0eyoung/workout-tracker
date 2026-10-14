@@ -297,6 +297,10 @@ function renderToday() {
   const cardioText = (cardio.text || "").replace(/^\d+ min:\s*/, "");
   $view.innerHTML = `
     ${checkinCard(p)}
+    ${p.garmin?.level ? `<div class="card season"><strong>${p.garmin.level === "recovery" ? "Garmin says: recovery day" : "Garmin says: go a bit lighter today"}</strong>
+      <div class="sub">${esc(p.garmin.reasons.join(", "))}. ${p.garmin.level === "recovery"
+        ? "Today is gentle recovery work."
+        : "One fewer exercise, a quarter less cardio, and no load increases."} You can turn this off in Settings.</div></div>` : ""}
     ${p.snow_sport ? snowCard(p) : ""}
     ${p.coach_changes ? `<div class="small muted">Today's plan has added sessions or coach changes. <button type="button" class="btn link small" data-act="reset-plan">Undo them</button></div>` : ""}
     <h2>1. Daily non-negotiables</h2>
@@ -716,6 +720,10 @@ function garminCard() {
     return `<div class="card"><h3>Garmin connected</h3>
       <p class="sub">${g.last ? `Last sync ${esc(formatDate(g.last.date))}${g.last.resting_hr ? ` · resting heart rate ${esc(g.last.resting_hr)}` : ""}` : "No data yet. Tap Sync now."}.
         The coach reads resting heart rate, HRV, sleep and your latest activity. It syncs every few hours.</p>
+      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="garmin-adjust" data-act-change="garmin-adjust" ${state.settings?.garmin_adjust ? "checked" : ""}>
+        Make days lighter when Garmin shows poor recovery</label>
+      <p class="small muted" style="margin:2px 0 0">Compared with your own last two weeks: short sleep (under 6 h), low body battery (under 30), HRV well below your usual,
+        or resting heart rate 5+ above your usual. One sign makes the day lighter, two or more make it a recovery day.</p>
       <div class="row-actions"><button type="button" class="btn small" data-act="garmin-sync">Sync now</button>
         <button type="button" class="btn small" data-act="garmin-disconnect">Disconnect</button></div>${msg}</div>`;
   }
@@ -1437,6 +1445,16 @@ $view.addEventListener("input", (e) => {
 $view.addEventListener("change", (e) => {
   const t = e.target;
   if (t.dataset.actChange === "progress") loadProgress(t.value);
+  else if (t.dataset.actChange === "garmin-adjust") {
+    api("api/settings", { method: "PUT", body: JSON.stringify({ garmin_adjust: t.checked }) })
+      .then(async (s) => {
+        state.settings = s;
+        if (saveTimer) await saveDraft();
+        refreshPlan().catch(() => {});
+        toast(t.checked ? "On: Garmin can make days lighter" : "Off");
+      })
+      .catch(() => toast("Couldn't save"));
+  }
   else if (t.dataset.actChange === "voice") {
     state.voice = t.value;
     state.audio = null;

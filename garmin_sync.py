@@ -143,6 +143,44 @@ def sync(today=None):
     return True, "Garmin data synced."
 
 
+def recovery_signal(today_iso):
+    """Is today a day to go lighter, by Garmin? {"level": None|"lighter"|"recovery", "reasons": [...]}.
+
+    Compared with your own recent numbers (14 days), not population norms. One sign of poor recovery makes the day
+    lighter; two or more make it a recovery day. Needs today's synced numbers; with no data nothing changes."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM garmin_metrics WHERE date <= ? ORDER BY date DESC LIMIT 15", (today_iso,))]
+        conn.close()
+    except sqlite3.Error:
+        return {"level": None, "reasons": []}
+    if not rows or rows[0]["date"] != today_iso:
+        return {"level": None, "reasons": []}
+    today, past = rows[0], rows[1:]
+
+    def median(key):
+        vals = sorted(r[key] for r in past if r.get(key))
+        return vals[len(vals) // 2] if len(vals) >= 5 else None
+
+    reasons = []
+    sleep = today.get("sleep_secs")
+    if sleep and sleep < 6 * 3600:
+        reasons.append(f"short sleep ({sleep / 3600:.1f} h)")
+    battery = today.get("body_battery")
+    if battery and battery < 30:
+        reasons.append(f"low body battery ({battery})")
+    hrv, hrv_usual = today.get("hrv_avg"), median("hrv_avg")
+    if hrv and hrv_usual and hrv < 0.85 * hrv_usual:
+        reasons.append(f"HRV {hrv} (your usual {hrv_usual})")
+    rhr, rhr_usual = today.get("resting_hr"), median("resting_hr")
+    if rhr and rhr_usual and rhr > rhr_usual + 5:
+        reasons.append(f"resting heart rate {rhr} (your usual {rhr_usual})")
+    level = "recovery" if len(reasons) >= 2 else "lighter" if reasons else None
+    return {"level": level, "reasons": reasons}
+
+
 def start_background(local_today):
     """Sync shortly after start, then every few hours while connected."""
     def loop():

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.3 - Garmin Lighter Days (Off by Default)
+
+### 🌟 Features
+* **Let Garmin make a day lighter.** A switch in Settings > Garmin, **off by default**. When it is on, today's synced Garmin numbers are compared with your own last two weeks:
+  * short sleep (under 6 hours), low body battery (under 30), HRV well below your usual (under 85%), or resting heart rate 5 or more above your usual.
+  * **One sign** makes the day lighter: one fewer exercise, about a quarter less cardio, and no load increases.
+  * **Two or more signs** make it a recovery day.
+* When it kicks in, the Today tab says which numbers triggered it. With no Garmin data for today, nothing changes.
 ## 0.9.2 - Swap Button and Weekly Recap
 
 ### 🌟 Features
