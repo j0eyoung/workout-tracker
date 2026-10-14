@@ -34,7 +34,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.8.3"
+VERSION = "0.8.4"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -272,6 +272,8 @@ def plan():
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
         "checkin": history.get_checkin(DB_PATH, today),
+        "snow_today": history.snow_days(DB_PATH, 5).get(today),
+        "snow_sport": bool({"skiing", "snowboarding"} & set(selected_sports())),
         "last_scores": {"kidney": last.get("kidney_flank_pain"), "pelvic_floor": last.get("pelvic_floor_tightness")},
         "cooldown": {"note": mindbody.cooldown_note(kidney, pf, day_focus, cool_cards), "cards": cool_cards,
                      "title": {"cardio": "Qigong cool-down", "recovery": "Recovery wind-down", "rest": "Recovery wind-down"}.get(day_focus, "Cool-down")},
@@ -438,6 +440,10 @@ def get_week(offset: int = 0):
     goals = selected_sports()
     done = {w["date"] for w in history.get_history(DB_PATH, 60) if (w.get("workout") or {}).get("session") != 2}
     days = planner.week(start, today, goals, done)
+    snow = history.snow_days(DB_PATH, 60)
+    for day in days:
+        if day["date"] in snow:
+            day["label"] = "Snow day: " + snow[day["date"]]
     rp = planner.replan_map(goals) if offset == 0 else {}
     replan = None
     if rp:
@@ -561,7 +567,33 @@ def _logged_dates():
     return {w["date"] for w in history.get_history(DB_PATH, 30) if (w.get("workout") or {}).get("session") != 2}
 
 
-planner.set_context(lambda: datetime.date.fromisoformat(history.local_today()), _logged_dates)
+planner.set_context(lambda: datetime.date.fromisoformat(history.local_today()), _logged_dates,
+                    lambda: set(history.snow_days(DB_PATH, 30)))
+
+
+class SnowDay(BaseModel):
+    sport: str                 # skiing | snowboarding
+    hours: float = 3
+    rpe: int = 6
+    kidney: int = 1
+    pelvic_floor: int = 1
+    notes: str = ""
+
+
+@app.post("/api/snowday")
+def log_snow_day(s: SnowDay):
+    """A day on the slopes counts as that day's workout (legs and cardio); tomorrow's legs get a break."""
+    if s.sport not in ("skiing", "snowboarding"):
+        raise HTTPException(400, "Choose skiing or snowboarding.")
+    today = history.local_today()
+    hours = max(0.5, min(float(s.hours), 12))
+    workout = {"type": "snow", "sport": s.sport, "hours": hours, "strength": [],
+               "cardio": f"{hours:g} h {s.sport}", "cardio_type": "snow", "cardio_minutes": int(hours * 60)}
+    draft = history.load_draft(DB_PATH, today)       # keep anything already typed in today's gym workout
+    log_id = history.complete_workout(DB_PATH, s.rpe, s.pelvic_floor, s.kidney, s.notes, workout, [])
+    if draft:
+        history.save_draft(DB_PATH, draft.get("tracker", []), draft.get("checks", {}), today)
+    return {"ok": True, "log_id": log_id}
 
 
 @app.on_event("startup")

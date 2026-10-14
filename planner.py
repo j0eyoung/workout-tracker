@@ -119,12 +119,12 @@ def overrides():
 # --- Skipped days: the rest of this week is re-planned ----------------------------------------------------------
 
 THEME_PRIORITY = ["core", "legs", "back", "hips", "full"]   # core activation first: it is the weakest area
-_ctx = {"today": None, "done": None, "cache": (0.0, None, None)}
+_ctx = {"today": None, "done": None, "snow": None, "cache": (0.0, None, None)}
 
 
-def set_context(today_fn, done_fn):
-    """The app tells the planner what 'today' is and which dates have a logged workout."""
-    _ctx["today"], _ctx["done"] = today_fn, done_fn
+def set_context(today_fn, done_fn, snow_fn=None):
+    """The app tells the planner what 'today' is, which dates have a logged workout and which were snow days."""
+    _ctx["today"], _ctx["done"], _ctx["snow"] = today_fn, done_fn, snow_fn
 
 
 def replan_map(goals):
@@ -187,6 +187,12 @@ def day_plan(date, goals):
         if theme and theme != day["theme"]:
             day["theme"], day["theme_label"] = theme, THEME_LABELS[theme]
             day["replanned"] = True
+        # the day after skiing or snowboarding, the legs get a break: core instead
+        if day["theme"] in ("legs", "full") and _ctx["snow"]:
+            yesterday = (date - datetime.timedelta(days=1)).isoformat()
+            if yesterday in _ctx["snow"]():
+                day["theme"], day["theme_label"] = "core", THEME_LABELS["core"]
+                day["after_snow"] = True
     return day
 
 

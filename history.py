@@ -35,6 +35,12 @@ SCHEMA = [
 ]
 
 
+def snow_days(db_path, limit=60):
+    """{date: sport} for logged ski and snowboard days."""
+    return {w["date"]: (w["workout"] or {}).get("sport", "snow") for w in get_history(db_path, limit)
+            if (w.get("workout") or {}).get("type") == "snow"}
+
+
 def save_checkin(db_path, kidney, pelvic_floor, date=None):
     conn = sqlite3.connect(db_path)
     conn.execute("INSERT OR REPLACE INTO daily_checkins (date, kidney, pelvic_floor, updated_at) VALUES (?, ?, ?, ?)",

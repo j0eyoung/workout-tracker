@@ -57,7 +57,7 @@ const state = {
   ],
   coachBusy: false,
   mind: null, mindFilter: "all", mindQ: "",
-  week: null, weekOffset: 0, coachDraft: "", secondOpen: false, ck: null, ckEdit: false,
+  week: null, weekOffset: 0, coachDraft: "", secondOpen: false, ck: null, ckEdit: false, snowOpen: false, snow: null,
   garmin: null, garminMsg: "",
   voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
@@ -260,6 +260,32 @@ function checkinCard(p) {
       ${saved ? `<button type="button" class="btn link small" data-act="checkin-cancel">Cancel</button>` : ""}</div></div>`;
 }
 
+// Snow days: a day skiing or snowboarding is logged as that day's workout (legs and cardio)
+function snowCard(p) {
+  if (p.snow_today) {
+    return `<div class="card"><strong>Snow day logged: ${esc(p.snow_today)} ✓</strong>
+      <div class="sub">It counts as today's workout. Tomorrow's leg work becomes core so your legs can recover.</div></div>`;
+  }
+  if (!state.snowOpen) {
+    return `<div class="card"><button type="button" class="btn small" data-act="snow-toggle">⛷️🏂 On the slopes today? Log a snow day</button></div>`;
+  }
+  const s = state.snow ||= { sport: "snowboarding", hours: 3, rpe: 6, kidney: p.checkin?.kidney ?? 1,
+    pelvic_floor: p.checkin?.pelvic_floor ?? 1, notes: "" };
+  const sl = (key, label) => `<div class="slider"><div class="lbl"><span>${label}</span><span class="val" id="snowval-${key}">${s[key]}/10</span></div>
+    <input type="range" min="1" max="10" step="1" value="${s[key]}" data-snow="${key}" aria-label="${label}"></div>`;
+  return `<div class="card"><h3>Log a snow day</h3>
+    <div class="chips wrap" style="margin:6px 0 10px">${[["skiing", "Skiing"], ["snowboarding", "Snowboarding"]].map(([k, l]) =>
+      `<button type="button" class="chip${s.sport === k ? " on" : ""}" data-act="snow-sport" data-v="${k}">${l}</button>`).join("")}</div>
+    <label class="sub" for="snow-hours">Hours on the snow</label>
+    <input id="snow-hours" class="code-input" style="width:100%" type="number" inputmode="decimal" min="0.5" max="12" step="0.5" value="${esc(s.hours)}" data-snow="hours">
+    ${sl("rpe", "Overall effort")}
+    ${sl("kidney", "Left kidney / flank tightness")}
+    ${sl("pelvic_floor", "Pelvic floor tightness")}
+    <textarea data-snow="notes" placeholder="How did it go? Falls, sore spots…">${esc(s.notes)}</textarea>
+    <div class="row-actions"><button type="button" class="btn primary" style="width:auto" data-act="snow-save">Save snow day</button>
+      <button type="button" class="btn link small" data-act="snow-toggle">Cancel</button></div></div>`;
+}
+
 function renderToday() {
   const p = state.plan;
   if (!p) {
@@ -270,6 +296,7 @@ function renderToday() {
   const cardioText = (cardio.text || "").replace(/^\d+ min:\s*/, "");
   $view.innerHTML = `
     ${checkinCard(p)}
+    ${p.snow_sport ? snowCard(p) : ""}
     ${p.coach_changes ? `<div class="small muted">Today's plan has added sessions or coach changes. <button type="button" class="btn link small" data-act="reset-plan">Undo them</button></div>` : ""}
     <h2>1. Daily non-negotiables</h2>
     ${p.warmup.map(warmupCard).join("")}
@@ -1189,6 +1216,22 @@ const actions = {
       toast("It's back in your plans");
     } catch { toast("Couldn't bring it back"); }
   },
+  "snow-toggle"() { state.snowOpen = !state.snowOpen; render(); },
+  "snow-sport"(el) { state.snow.sport = el.dataset.v; render(); },
+  async "snow-save"(el) {
+    const s = state.snow;
+    el.disabled = true;
+    try {
+      await api("api/snowday", { method: "POST", body: JSON.stringify({ ...s, hours: Number(s.hours) || 3 }) });
+      state.snowOpen = false;
+      state.snow = null;
+      state.history = null;
+      state.week = null;
+      if (saveTimer) await saveDraft();
+      await refreshPlan();
+      toast("Snow day saved to History 🏔️");
+    } catch { toast("Couldn't save the snow day"); el.disabled = false; }
+  },
   "checkin-edit"() { state.ckEdit = true; state.ck = null; render(); },
   "checkin-cancel"() { state.ckEdit = false; state.ck = null; render(); },
   async "checkin-save"(el) {
@@ -1287,6 +1330,11 @@ $view.addEventListener("input", (e) => {
     const label = document.getElementById(`val-${t.dataset.finish}`);
     if (label) label.textContent = `${t.value}/10`;
     store.set(finishKey(), state.finish);
+  } else if (t.dataset.snow) {
+    const key = t.dataset.snow;
+    state.snow[key] = key === "notes" ? t.value : Number(t.value);
+    const label = document.getElementById(`snowval-${key}`);
+    if (label) label.textContent = `${t.value}/10`;
   } else if (t.dataset.ck) {
     state.ck[t.dataset.ck] = Number(t.value);
     const label = document.getElementById(`ckval-${t.dataset.ck}`);

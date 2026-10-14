@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.4 - Snow Days
+
+### 🌟 Features
+* **"Log a snow day" on the Today tab** (when Skiing or Snowboarding is ticked in Settings). Pick skiing or snowboarding, hours on the snow, effort, and your kidney and pelvic floor scores, plus notes. It is saved to History as that day's workout.
+* **The next day's legs get a break:** a legs or full-body day right after a snow day becomes a core activation day.
+* The Week tab labels snow days, and a snow day counts as a done day, so it doesn't trigger the skipped-day re-plan.
+* Anything you had already typed into the day's gym workout is kept.
 ## 0.8.3 - "Bothered Me"
 
 ### 🌟 Features
