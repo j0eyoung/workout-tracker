@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.0 - Peloton and Rower Come Back When Your Body Says So
+
+### 🌟 Features
+* **The Peloton and the water rower unlock from your own scores** (morning check-ins and workout logs), not from a calendar.
+  * **Peloton:** unlocks when your pelvic floor score averages 3 or lower over the last 7 days with no day above 5. It starts at 12 easy minutes and adds 5 minutes a week (up to 45). It steps back to walking after a pelvic floor score of 5 or more.
+  * **Rower:** unlocks after 2 good weeks on the Peloton and 14 days of kidney scores at 3 or lower. It starts at 8 easy minutes at a low water level, adds 5 minutes a week (up to 30), and steps back after a kidney score above 4.
+* **Once unlocked, they rotate with walking on your cardio days**, with the minutes shown on the Week tab.
+* **Week tab status card** for both machines: in your plan, or what is still needed ("Needs a few more scored days", "unlocks when…").
+* **Settings > Peloton and rower:** Automatic, "PT cleared it" (use it now) or "Not yet" (keep it off) for each machine. Your choice wins over the automatic rules.
+* The coach knows which machines are unlocked, and its plan changes can't add a locked one.
+
+These thresholds are a starting point, not medical advice. Check them with your PT.
 ## 0.8.4 - Snow Days
 
 ### 🌟 Features

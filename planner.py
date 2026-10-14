@@ -119,12 +119,28 @@ def overrides():
 # --- Skipped days: the rest of this week is re-planned ----------------------------------------------------------
 
 THEME_PRIORITY = ["core", "legs", "back", "hips", "full"]   # core activation first: it is the weakest area
-_ctx = {"today": None, "done": None, "snow": None, "cache": (0.0, None, None)}
+_ctx = {"today": None, "done": None, "snow": None, "machines": None, "cache": (0.0, None, None), "mcache": (0.0, None)}
 
 
-def set_context(today_fn, done_fn, snow_fn=None):
-    """The app tells the planner what 'today' is, which dates have a logged workout and which were snow days."""
-    _ctx["today"], _ctx["done"], _ctx["snow"] = today_fn, done_fn, snow_fn
+def set_context(today_fn, done_fn, snow_fn=None, machines_fn=None):
+    """The app tells the planner what 'today' is, which dates have a logged workout, which were snow days and which
+    cardio machines are unlocked (readiness.status)."""
+    _ctx["today"], _ctx["done"], _ctx["snow"], _ctx["machines"] = today_fn, done_fn, snow_fn, machines_fn
+
+
+def machines():
+    """Unlocked cardio machines, cached for a few seconds (the week view asks many times per request)."""
+    if not _ctx["machines"]:
+        return {}
+    stamp, cached = _ctx["mcache"]
+    if cached is not None and time.time() - stamp < 5:
+        return cached
+    try:
+        result = _ctx["machines"]()
+    except Exception:
+        result = {}
+    _ctx["mcache"] = (time.time(), result)
+    return result
 
 
 def replan_map(goals):
@@ -193,6 +209,17 @@ def day_plan(date, goals):
             if yesterday in _ctx["snow"]():
                 day["theme"], day["theme_label"] = "core", THEME_LABELS["core"]
                 day["after_snow"] = True
+    if day["focus"] == "cardio" and not day.get("changed") and "triathlon" not in goals:
+        # Peloton and rower come back once your scores unlock them (readiness.py); they rotate with walking
+        st = machines()
+        unlocked = [m for m in ("bike", "row") if (st.get(m) or {}).get("ok")]
+        if unlocked:
+            options = unlocked + ["walk"]
+            choice = options[(week_number(date) + date.weekday()) % len(options)]
+            day["cardio_type"] = choice
+            if choice in unlocked:
+                day["cardio_minutes"] = st[choice]["minutes"]
+                day["machine"] = st[choice]["name"]
     return day
 
 

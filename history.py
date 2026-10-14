@@ -35,6 +35,26 @@ SCHEMA = [
 ]
 
 
+def daily_scores(db_path, days=30, today=None):
+    """{date: {"kidney", "pelvic_floor"}} for each recent day: the morning check-in if there was one, otherwise the
+    scores logged with that day's last workout."""
+    today = today or local_now().date()
+    since = (today - datetime.timedelta(days=days)).isoformat()
+    conn = sqlite3.connect(db_path)
+    out = {}
+    for d, k, p in conn.execute("SELECT date, kidney_flank_pain, pelvic_floor_tightness FROM daily_logs WHERE date >= ? "
+                                "ORDER BY id", (since,)):
+        if k is not None and p is not None:
+            out[d] = {"kidney": k, "pelvic_floor": p}
+    try:
+        for d, k, p in conn.execute("SELECT date, kidney, pelvic_floor FROM daily_checkins WHERE date >= ?", (since,)):
+            out[d] = {"kidney": k, "pelvic_floor": p}
+    except sqlite3.OperationalError:
+        pass
+    conn.close()
+    return out
+
+
 def snow_days(db_path, limit=60):
     """{date: sport} for logged ski and snowboard days."""
     return {w["date"]: (w["workout"] or {}).get("sport", "snow") for w in get_history(db_path, limit)

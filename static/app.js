@@ -572,13 +572,16 @@ async function renderWeek() {
     <p class="small muted" style="margin:0 0 8px">${esc(range)} · <strong>${esc(w.phase)}</strong></p>
     ${w.replan ? `<div class="card season"><strong>You skipped a day, so I re-planned the week</strong>
       <div class="sub">Moved up: ${esc(w.replan.missed.join(", "))}.${w.replan.dropped.length ? ` Left out to keep your rest day: ${esc(w.replan.dropped.join(", "))}.` : ""}</div></div>` : ""}
+    ${w.machines && !w.sports?.includes("triathlon") ? `<div class="card"><strong>Cardio machines</strong>
+      ${Object.values(w.machines).map((m) => `<div class="sub" style="margin-top:4px">${m.ok ? "✅" : m.stepped_back ? "⏸️" : "🔒"} <strong>${esc(m.name)}</strong>:
+        ${m.ok ? `in your plan, ${esc(m.minutes)} easy minutes` : esc(m.why)}</div>`).join("")}</div>` : ""}
     ${w.season ? `<div class="card season"><strong>${esc(w.season.phase)}</strong>${w.season.days > 0 ? ` · ${w.season.days} day${w.season.days === 1 ? "" : "s"} to opening day` : ""}
       <div class="sub">${esc(w.season.text)}</div></div>` : ""}
     ${w.days.map((d) => `<div class="card week-day ${d.status}">
       <div class="week-head"><strong>${esc(d.weekday)}</strong> <span class="muted">${esc(formatDate(d.date))}</span>
         <span class="badge">${esc(d.label)}</span>${badge[d.status] ? `<span class="badge${d.status === "missed" ? " bad" : ""}">${badge[d.status]}</span>` : ""}</div>
       ${d.theme_label ? `<div class="sub">${esc(d.focus === "cardio" ? "Cardio " : "")}${esc(d.theme_label)}${d.replanned ? " · moved up after a skipped day" : ""}</div>` : ""}
-      ${d.cardio_text && d.focus === "cardio" ? `<div><strong>${esc(d.cardio_text)}</strong>${d.long ? " (long and easy)" : ""}</div>` : ""}
+      ${d.cardio_text && d.focus === "cardio" ? `<div><strong>${esc(d.cardio_text)}</strong>${d.machine ? ` on the ${esc(d.machine)}` : ""}${d.long ? " (long and easy)" : ""}</div>` : ""}
       ${d.strength?.length ? `<div class="sub">${esc(d.strength.slice(0, 6).join(", "))}${d.strength.length > 6 ? "…" : ""}</div>` : ""}
       <div class="small muted">${esc(d.mind)}</div>
       ${d.changed ? `<div class="small" style="color:var(--accent)">Changed by your coach${d.note ? `: ${esc(d.note)}` : ""}</div>` : ""}
@@ -730,6 +733,15 @@ async function renderSettings() {
       <p class="sub" style="margin:0 0 8px">Exercises you marked "Bothered me". They sit out until the date, then come back with a go-lighter reminder.</p>
       ${s.paused.map((x) => `<div class="paused-row"><span>${esc(x.name)} <span class="muted small">until ${esc(formatDate(x.until))}</span></span>
         <button type="button" class="btn small" data-act="unpause" data-name="${esc(x.name)}">Bring back</button></div>`).join("")}
+    </div>` : ""}
+    ${s.machines ? `<h2>Peloton and rower</h2>
+    <div class="card">
+      <p class="sub" style="margin:0 0 8px">They come back into your plan on their own once your scores stay low. Your PT can overrule that here.</p>
+      ${Object.entries(s.machines).map(([k, m]) => `<div style="margin:10px 0 4px"><strong>${esc(m.name)}</strong>
+        <span class="muted small">${m.ok ? `unlocked, ${esc(m.minutes)} min` : "locked"}</span></div>
+        <div class="small muted">${esc(m.why)}</div>
+        <div class="chips wrap" style="margin-top:6px">${[["auto", "Automatic"], ["cleared", "PT cleared it"], ["not_yet", "Not yet"]].map(([v, l]) =>
+          `<button type="button" class="chip${m.override === v ? " on" : ""}" data-act="machine" data-m="${k}" data-v="${v}">${l}</button>`).join("")}</div>`).join("")}
     </div>` : ""}
     <h2>Equipment</h2>
     <div class="card">
@@ -1195,6 +1207,17 @@ const actions = {
     if (m) m.dismissed = true;
     store.set("coach", state.coach.slice(-50));
     renderCoach();
+  },
+  async machine(el) {
+    try {
+      const st = await api("api/machines", { method: "POST", body: JSON.stringify({ machine: el.dataset.m, value: el.dataset.v }) });
+      state.settings.machines = st;
+      state.week = null;
+      if (saveTimer) await saveDraft();
+      refreshPlan().catch(() => {});
+      renderSettings();
+      toast("Saved");
+    } catch { toast("Couldn't save"); }
   },
   async bothered(el) {
     const name = el.dataset.name;

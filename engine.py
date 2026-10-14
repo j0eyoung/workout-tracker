@@ -3,7 +3,7 @@ import json
 import random
 
 # Starting minutes for each cardio type, all at an easy pace (Zone 2)
-CARDIO_BASE_MINUTES = {"recovery": 15, "swim": 20, "bike": 30, "run": 20, "walk": 20}
+CARDIO_BASE_MINUTES = {"recovery": 15, "swim": 20, "bike": 30, "run": 20, "walk": 20, "row": 10}
 CARDIO_MAX_MINUTES = 45
 # Add at most 5 minutes per week
 PROGRESSION_DAYS = 7
@@ -14,6 +14,7 @@ CARDIO_TEXT = {
     "bike": "Cycling at low resistance and high cadence (85-95 rpm). Or swap for a backwards incline walk of the same length",
     "run": "Running in Zone 2, high cadence to minimize ground reaction force. If your heart rate drifts above Zone 2, alternate 2 min running / 1 min walking",
     "walk": "Treadmill incline walk",
+    "row": "Water rower: easy, smooth strokes at a low water level. Push with the legs, keep the belly soft and breathe out on the drive; no sprints",
 }
 
 # Extra exercises drawn from the exercise library each day: (goal tag, why it is in the plan)
@@ -156,7 +157,7 @@ class WorkoutEngine:
         else:
             auto_type = "walk"
         # The week's plan may ask for a different type, but only one that is safe at today's pelvic floor score
-        safe_for_pf = {"swim": True, "walk": True, "bike": pf_tightness < 7, "run": pf_tightness < 4}
+        safe_for_pf = {"swim": True, "walk": True, "bike": pf_tightness < 7, "run": pf_tightness < 4, "row": pf_tightness < 7}
         cardio_type = cardio_type if cardio_type in safe_for_pf and safe_for_pf[cardio_type] else auto_type
         self._set_cardio(workout_plan, cardio_type, rpe, kidney_pain, last_workout, today)
 

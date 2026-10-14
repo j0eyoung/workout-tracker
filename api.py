@@ -27,6 +27,7 @@ import ninjas_sync
 import planedit
 import planner
 import progression
+import readiness
 import tts
 from db import DB_PATH, get_last_log
 import engine as engine_mod
@@ -34,7 +35,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.8.4"
+VERSION = "0.9.0"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -170,11 +171,15 @@ def _drop_paused(ops):
     """Removes 'add' changes for paused exercises: (kept ops, reasons)."""
     resting = paused()
     lower = {n.lower(): (n, p) for n, p in resting.items()}
+    st = readiness.status()
     kept, why = [], []
     for op in ops:
         hit = lower.get(str(op.get("name") or "").strip().lower()) if op.get("op") == "add" else None
+        machine = op.get("type") if op.get("op") in ("cardio", "extra_cardio", "day") else None
         if hit:
             why.append(f"{hit[0]} is paused until {datetime.date.fromisoformat(hit[1]['until']):%b %d} because it bothered you.")
+        elif machine in st and not st[machine]["ok"]:
+            why.append(f"The {st[machine]['name']} isn't unlocked yet: {st[machine]['why']}")
         else:
             kept.append(op)
     return kept, why
@@ -391,6 +396,10 @@ def ask_coach(m: CoachMessage):
     resting = paused()
     pause_line = ("PAUSED EXERCISES (they bothered Joe; do not suggest them until the date): " +
                   "; ".join(f"{n} until {p['until']}" for n, p in resting.items())) if resting else ""
+    st = readiness.status()
+    pause_line += ("\nCARDIO MACHINES (cardio type 'bike' = Peloton, 'row' = water rower; only suggest unlocked ones): " +
+                   "; ".join(f"{v['name']}: {'unlocked, ' + str(v['minutes']) + ' min max' if v['ok'] else 'locked. ' + v['why']}"
+                             for v in st.values()))
     entries = [e for e in lib["entries"] if e["name"] not in resting]
     context = "\n\n".join(x for x in [planedit.INSTRUCTIONS, ck_line, pause_line,
                                       planedit.context(plan, entries, library.selected_equipment(), selected_sports()),
@@ -462,7 +471,7 @@ def get_week(offset: int = 0):
         except ValueError:
             pass
     return {"start": start.isoformat(), "offset": offset, "days": days, "sports": goals, "phase": planner.phase(start),
-            "season": _season(today), "replan": replan,
+            "season": _season(today), "replan": replan, "machines": readiness.status(today),
             "season_start": season, "weeks_to_season": weeks_left}
 
 
@@ -568,7 +577,28 @@ def _logged_dates():
 
 
 planner.set_context(lambda: datetime.date.fromisoformat(history.local_today()), _logged_dates,
-                    lambda: set(history.snow_days(DB_PATH, 30)))
+                    lambda: set(history.snow_days(DB_PATH, 30)), readiness.status)
+
+
+class MachineOverride(BaseModel):
+    machine: str      # bike | row
+    value: str        # auto | cleared | not_yet
+
+
+@app.post("/api/machines")
+def set_machine_override(m: MachineOverride):
+    if m.machine not in readiness.MACHINES or m.value not in readiness.OVERRIDES:
+        raise HTTPException(400, "Unknown machine or setting.")
+    ov = library.load_settings().get("machine_override") or {}
+    ov[m.machine] = m.value
+    library.save_settings({"machine_override": ov})
+    planner._ctx["mcache"] = (0.0, None)
+    return readiness.status()
+
+
+@app.get("/api/machines")
+def get_machines():
+    return readiness.status()
 
 
 class SnowDay(BaseModel):
@@ -726,6 +756,7 @@ def get_settings():
             "sports": selected_sports(), "sport_options": [{"id": i, "label": l} for i, l in SPORT_OPTIONS],
             "season_start": library.load_settings().get("season_start", ""),
             "paused": [{"name": n, "since": p["since"], "until": p["until"]} for n, p in sorted(paused().items())],
+            "machines": readiness.status() if "triathlon" not in selected_sports() else None,
             "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)}
 
 
