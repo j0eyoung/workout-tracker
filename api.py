@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 import coach
 import garmin_sync
+import ha
 import history
 import library
 import media
@@ -35,7 +36,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -329,6 +330,7 @@ def complete(c: Completion):
         rows = [r for r in c.tracker if _page_row(r).get("exercise") in names2]
         log_id = history.complete_workout(DB_PATH, c.rpe, c.pelvic_floor, c.kidney, c.notes, w2,
                                           [_history_row(_page_row(r)) for r in rows])
+        _ha_refresh_soon()
         return {"ok": True, "log_id": log_id}
     # First session: log everything except the second session, and keep the second session's sets in the draft
     first = dict(w, strength=[n for n in w["strength"] if n not in names2])
@@ -340,6 +342,7 @@ def complete(c: Completion):
                                       [_history_row(_page_row(r)) for r in mine])
     if kept:
         history.save_draft(DB_PATH, kept, {}, today)
+    _ha_refresh_soon()
     return {"ok": True, "log_id": log_id}
 
 
@@ -562,6 +565,7 @@ class CheckIn(BaseModel):
 def save_checkin(c: CheckIn):
     """This morning's flank and pelvic floor scores. Today's plan is built from these instead of last session's."""
     history.save_checkin(DB_PATH, c.kidney, c.pelvic_floor)
+    _ha_refresh_soon()
     return {"ok": True, "checkin": history.get_checkin(DB_PATH)}
 
 
@@ -623,12 +627,127 @@ def log_snow_day(s: SnowDay):
     log_id = history.complete_workout(DB_PATH, s.rpe, s.pelvic_floor, s.kidney, s.notes, workout, [])
     if draft:
         history.save_draft(DB_PATH, draft.get("tracker", []), draft.get("checks", {}), today)
+    _ha_refresh_soon()
     return {"ok": True, "log_id": log_id}
 
 
 @app.on_event("startup")
 def _start_garmin_sync():
     garmin_sync.start_background(history.local_today)
+
+
+# --- Home Assistant: sensors and the morning reminder --------------------------------------------------------------
+
+def streak():
+    """Days in a row with a logged workout. Planned rest days don't break it; today counts once it's logged."""
+    logged = {w["date"] for w in history.get_history(DB_PATH, 400)}
+    d = datetime.date.fromisoformat(history.local_today())
+    if d.isoformat() not in logged:
+        d -= datetime.timedelta(days=1)
+    n = 0
+    for _ in range(365):
+        if d.isoformat() in logged:
+            n += 1
+        elif planner.day_plan(d, selected_sports())["focus"] != "rest":
+            break
+        d -= datetime.timedelta(days=1)
+    return n
+
+
+def ha_refresh():
+    """Pushes today's workout and the streak to Home Assistant (sensor.workout_today, sensor.workout_streak)."""
+    if not ha.available():
+        return
+    today = history.local_today()
+    w = todays_workout()
+    day = planner.day_plan(datetime.date.fromisoformat(today), selected_sports())
+    done = today in _logged_dates()
+    if done:
+        state = "Done"
+    elif w.get("cardio_type") == "recovery" or day["focus"] in ("rest", "recovery"):
+        state = "Rest day" if day["focus"] == "rest" else "Recovery day"
+    elif day["focus"] == "cardio":
+        state = f"Cardio: {w.get('cardio_minutes')} min {w.get('cardio_type')}"
+    else:
+        state = f"Strength: {day.get('theme_label') or 'strength'}"
+    ha.set_state("sensor.workout_today", state, {
+        "friendly_name": "Today's workout", "icon": "mdi:dumbbell", "done": done,
+        "checked_in": bool(history.get_checkin(DB_PATH)), "exercises": w.get("strength", []), "cardio": w.get("cardio", "")})
+    n = streak()
+    ha.set_state("sensor.workout_streak", n, {"friendly_name": "Workout streak", "icon": "mdi:fire",
+                                              "unit_of_measurement": "days"})
+
+
+def _ha_refresh_soon():
+    threading.Thread(target=lambda: _quietly(ha_refresh), daemon=True).start()
+
+
+def _quietly(fn):
+    try:
+        fn()
+    except Exception as e:
+        print(f"Home Assistant update failed: {e}", flush=True)
+
+
+def _maybe_remind():
+    r = library.load_settings().get("reminder") or {}
+    if not (r.get("enabled") and r.get("service") and ha.available()):
+        return
+    now = history.local_now()
+    today = now.date().isoformat()
+    if r.get("sent") == today or now.strftime("%H:%M") < r.get("time", "07:30"):
+        return
+    if history.get_checkin(DB_PATH) or today in _logged_dates():
+        return
+    ha.notify(r["service"], "How do you feel today?",
+              "Tap to check in your kidney and pelvic floor scores. Today's plan adapts to them.")
+    library.save_settings({"reminder": {**r, "sent": today}})
+
+
+@app.on_event("startup")
+def _start_ha_loop():
+    def loop():
+        time.sleep(30)
+        while True:
+            _quietly(ha_refresh)
+            _quietly(_maybe_remind)
+            time.sleep(300)
+    threading.Thread(target=loop, daemon=True).start()
+
+
+@app.get("/api/ha")
+def ha_info():
+    r = library.load_settings().get("reminder") or {}
+    return {"available": ha.available(), "services": ha.notify_services() if ha.available() else [],
+            "reminder": {"enabled": bool(r.get("enabled")), "time": r.get("time", "07:30"), "service": r.get("service", "")}}
+
+
+class Reminder(BaseModel):
+    enabled: bool
+    time: str = "07:30"
+    service: str = ""
+
+
+@app.post("/api/ha/reminder")
+def save_reminder(r: Reminder):
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", r.time):
+        raise HTTPException(400, "Use a time like 07:30.")
+    old = library.load_settings().get("reminder") or {}
+    library.save_settings({"reminder": {**old, "enabled": r.enabled, "time": r.time, "service": r.service.strip()}})
+    return ha_info()
+
+
+@app.post("/api/ha/test")
+def ha_test():
+    r = library.load_settings().get("reminder") or {}
+    if not r.get("service"):
+        raise HTTPException(400, "Pick your phone first.")
+    try:
+        ha.notify(r["service"], "Workout reminder test", "This is how your morning check-in reminder will look.")
+        _quietly(ha_refresh)
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:120]}"}
 
 
 @app.get("/api/garmin")

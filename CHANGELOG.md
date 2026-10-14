@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1 - Home Assistant Sensors and Morning Reminder
+
+### 🌟 Features
+* **Two sensors for your dashboards:** `sensor.workout_today` (for example "Strength: Legs: quads and glutes", "Cardio: 25 min bike", "Rest day" or "Done", with the exercise list as attributes) and `sensor.workout_streak` (days in a row with a workout; planned rest days don't break it). They update every 5 minutes and right after you log something.
+* **Morning check-in reminder to your phone** through the Home Assistant app. Pick your phone and a time in Settings > Home Assistant. It only comes if you haven't checked in or worked out yet that day, and tapping it opens this app. "Send a test" tries it straight away.
+
+### 🔧 Changes
+* The add-on now asks Home Assistant for API access (needed for the sensors and notifications). Home Assistant shows this on the add-on page.
 ## 0.9.0 - Peloton and Rower Come Back When Your Body Says So
 
 ### 🌟 Features

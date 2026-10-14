@@ -58,7 +58,7 @@ const state = {
   coachBusy: false,
   mind: null, mindFilter: "all", mindQ: "",
   week: null, weekOffset: 0, coachDraft: "", secondOpen: false, ck: null, ckEdit: false, snowOpen: false, snow: null,
-  garmin: null, garminMsg: "",
+  garmin: null, garminMsg: "", ha: null,
   voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
   lib: { q: "", focus: "", muscle: "", equipment: "", pictures: true, filtered: false, data: null, results: [], offset: 0 },
@@ -682,6 +682,30 @@ async function sendCoach() {
 // --- Settings ---------------------------------------------------------------------------------
 // One tab for everything you can change. New sections (sports, training goals) go in as more cards.
 
+function haCard() {
+  const h = state.ha;
+  if (!h) {
+    api("api/ha").then((r) => { state.ha = r; if (state.tab === "settings") renderSettings(); }).catch(() => { state.ha = { available: false }; });
+    return `<div class="card muted">Checking Home Assistant…</div>`;
+  }
+  if (!h.available) return `<div class="card"><p class="sub" style="margin:0">Restart the add-on after this update to connect it to Home Assistant.</p></div>`;
+  const r = h.reminder;
+  return `<div class="card">
+    <p class="sub" style="margin:0 0 8px"><strong>Sensors:</strong> <code>sensor.workout_today</code> and <code>sensor.workout_streak</code> stay up to date. Add them to any dashboard.</p>
+    <label class="toggle"><input type="checkbox" id="ha-on" ${r.enabled ? "checked" : ""}> Morning check-in reminder to my phone</label>
+    <div class="two-col" style="margin-top:8px">
+      <input type="time" id="ha-time" class="code-input" value="${esc(r.time)}" aria-label="Reminder time">
+      <select id="ha-service" aria-label="Phone">${h.services.length
+        ? h.services.map((s) => `<option value="${esc(s)}"${s === r.service ? " selected" : ""}>${esc(s.replace(/^mobile_app_/, "").replace(/_/g, " "))}</option>`).join("")
+        : `<option value="">No phone found</option>`}</select>
+    </div>
+    ${h.services.length ? "" : `<p class="small muted">Install the Home Assistant app on your phone and sign in, then come back here.</p>`}
+    <p class="small muted">It only comes if you haven't checked in or worked out yet that day. Tapping it opens this app.</p>
+    <div class="row-actions"><button type="button" class="btn small" data-act="ha-save">Save</button>
+      <button type="button" class="btn small" data-act="ha-test" ${h.services.length ? "" : "disabled"}>Send a test</button></div>
+  </div>`;
+}
+
 function garminCard() {
   const g = state.garmin;
   if (!g) return `<div class="card muted">Checking Garmin…</div>`;
@@ -764,6 +788,8 @@ async function renderSettings() {
       <input type="url" id="media-url" class="code-input" style="width:100%" value="${esc(s.media_base_url)}" placeholder="https://…/workout/yoga">
       <div class="row-actions"><button type="button" class="btn small" data-act="save-media">Save</button></div>
     </div>`}
+    <h2>Home Assistant</h2>
+    ${haCard()}
     <h2>Garmin</h2>
     ${garminCard()}
     <h2>AI Coach</h2>
@@ -1207,6 +1233,21 @@ const actions = {
     if (m) m.dismissed = true;
     store.set("coach", state.coach.slice(-50));
     renderCoach();
+  },
+  async "ha-save"() {
+    try {
+      state.ha = await api("api/ha/reminder", { method: "POST", body: JSON.stringify({
+        enabled: document.getElementById("ha-on").checked, time: document.getElementById("ha-time").value || "07:30",
+        service: document.getElementById("ha-service").value }) });
+      toast("Saved");
+      renderSettings();
+    } catch { toast("Couldn't save. Use a time like 07:30."); }
+  },
+  async "ha-test"() {
+    try {
+      const r = await api("api/ha/test", { method: "POST" });
+      toast(r.ok ? "Test sent. Check your phone." : `Couldn't send: ${r.error}`);
+    } catch { toast("Save the reminder with your phone picked first"); }
   },
   async machine(el) {
     try {
