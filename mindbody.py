@@ -476,11 +476,11 @@ def _breathing(c):
     return [y for y in c["yoga"] if y["category"] == "breath" and y["cooldown"]]
 
 
-# Recovery equipment from Joe's gym. His PT said both can help; they are only offered on low-symptom days, short,
-# and are skipped when equipment is untoggled in Settings.
+# Recovery equipment from Joe's gym. His PT said both can help and Joe finds them fine at any symptom level (helpful
+# when he is tight), so they are never gated on symptoms; short sessions, skipped when untoggled in Settings.
 _TOOL_WARNING = {
-    "vibration plate": "Lowest setting only and short. Skip it if your kidney area or pelvic floor feels irritated, and step off if you feel dizzy.",
-    "inversion table": "Shallow angle only, short, low-symptom days only. Come up slowly, and stop at any pressure in your head, dizziness or flank discomfort.",
+    "vibration plate": "Lowest setting only and short. Step off if you feel dizzy or any sharp pain.",
+    "inversion table": "Shallow angle only and short. Come up slowly, and stop at any pressure in your head, dizziness or sharp pain.",
 }
 
 
@@ -528,11 +528,11 @@ def cooldown(kidney=0, pelvic_floor=0, minutes=8, focus="strength", day=None, eq
     def by_cat(*cats):
         return [y for y in yoga if y["category"] in cats]
 
-    tools = [] if high else tool_cards(equipment, "cooldown")
+    tools = tool_cards(equipment, "cooldown")   # fine at any symptom level; Joe finds them helpful when he is tight
 
     def with_tool(cards_, prefer=None):
-        # about every other day one piece of recovery equipment is added at the end (never on high-symptom days)
-        if tools and rng.random() < 0.5:
+        # one piece of recovery equipment at the end: always on tight or recovery days, otherwise every other day
+        if tools and (high or focus in ("recovery", "rest") or rng.random() < 0.5):
             pick = [t for t in tools if prefer and prefer in t["name"].lower()] or tools
             return cards_ + [dict(rng.choice(pick))]
         return cards_
@@ -540,7 +540,7 @@ def cooldown(kidney=0, pelvic_floor=0, minutes=8, focus="strength", day=None, eq
     if high or focus in ("recovery", "rest"):
         calm = by_cat("restorative")
         base = [dict(y) for y in (rng.sample(calm, min(3, len(calm))) + rng.sample(breathing, min(2, len(breathing))))]
-        return base if high else with_tool(base, "inversion")
+        return with_tool(base, "inversion")
     if focus == "cardio":
         style = rng.choice(["qigong_a", "qigong_b", "qigong_all", "flow", "combo"])
         q = c["qigong"]

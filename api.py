@@ -34,7 +34,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.7.2"
+VERSION = "0.8.0"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -113,13 +113,23 @@ def selected_sports():
     return chosen if chosen is not None else ["skiing", "snowboarding", "triathlon"]
 
 
+def current_log(date_iso=None):
+    """The last logged workout's numbers, with this morning's check-in laid over them for today."""
+    last = dict(get_last_log())
+    if date_iso in (None, history.local_today()):
+        ck = history.get_checkin(DB_PATH)
+        if ck:
+            last["kidney_flank_pain"], last["pelvic_floor_tightness"] = ck["kidney"], ck["pelvic_floor"]
+    return last
+
+
 def _generate(date_iso):
     """The engine's workout for a date, following that day's place in the weekly plan."""
     goals = selected_sports()
     d = datetime.date.fromisoformat(date_iso)
     day = planner.day_plan(d, goals)
     w = engine.generate_next_workout(
-        get_last_log(), today=d, library=get_library()["entries"], equipment=library.selected_equipment(),
+        current_log(date_iso), today=d, library=get_library()["entries"], equipment=library.selected_equipment(),
         goals=goals, focus=day["focus"], cardio_type=day["cardio_type"], theme=day["theme"],
         season_phase=day.get("season_phase"))
     if day["phase"] == "Easy week" and day["focus"] == "strength" and w.get("accessories"):
@@ -173,7 +183,7 @@ def plan():
     w = todays_workout()
     why = {a["name"]: a["why"] for a in w.get("accessories", [])}
     draft = history.load_draft(DB_PATH, today) or {}
-    last = get_last_log()
+    last = current_log(today)
     kidney, pf = last.get("kidney_flank_pain"), last.get("pelvic_floor_tightness")
     phase = planner.phase(datetime.date.fromisoformat(today))
     day_focus = planner.day_plan(datetime.date.fromisoformat(today), selected_sports())["focus"]
@@ -182,8 +192,8 @@ def plan():
     equipment = library.selected_equipment()
     cool_cards = mindbody.cooldown(kidney, pf, focus=day_focus, day=today, equipment=equipment)
     warmup_cards = [how_to(n) for n in w["warmup"]]
-    # Vibration board primer: only on strength days with low symptoms (kidney 3 or less, pelvic floor 6 or less)
-    if day_focus == "strength" and (kidney or 0) <= 3 and (pf or 0) <= 6:
+    # Vibration board primer on strength days (fine at any symptom level, short and lowest setting)
+    if day_focus == "strength":
         warmup_cards += mindbody.tool_cards(equipment, "warmup")
     season = _season(datetime.date.fromisoformat(today))
     if season and season["phase"] in ("Taper", "Opening day"):
@@ -192,6 +202,8 @@ def plan():
         "season": season,
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
+        "checkin": history.get_checkin(DB_PATH, today),
+        "last_scores": {"kidney": last.get("kidney_flank_pain"), "pelvic_floor": last.get("pelvic_floor_tightness")},
         "cooldown": {"note": mindbody.cooldown_note(kidney, pf, day_focus, cool_cards), "cards": cool_cards,
                      "title": {"cardio": "Qigong cool-down", "recovery": "Recovery wind-down", "rest": "Recovery wind-down"}.get(day_focus, "Cool-down")},
         "date": today,
@@ -302,7 +314,10 @@ def ask_coach(m: CoachMessage):
     plan = todays_workout()
     lib = get_library()
     today = datetime.date.fromisoformat(history.local_today())
-    context = "\n\n".join([planedit.INSTRUCTIONS, planedit.context(plan, lib["entries"], library.selected_equipment(), selected_sports()),
+    ck = history.get_checkin(DB_PATH)
+    ck_line = (f"TODAY'S MORNING CHECK-IN (Joe's own scores, 1-10): left kidney/flank {ck['kidney']}, pelvic floor tightness "
+               f"{ck['pelvic_floor']}. Use these for today.") if ck else "No morning check-in yet today."
+    context = "\n\n".join([planedit.INSTRUCTIONS, ck_line, planedit.context(plan, lib["entries"], library.selected_equipment(), selected_sports()),
                            planedit.week_context(today, selected_sports())])
     info = _season(today)
     season_text = (f"{info['opening']} ({info['days']} days away)" if info["days"] > 0 else f"{info['opening']} (it has opened)") + \
@@ -386,7 +401,7 @@ def add_second_session(s: SecondSession):
     equipment = library.selected_equipment()
     today = datetime.date.fromisoformat(history.local_today())
     plan = planedit.apply(_generate(today.isoformat()), planedit.overrides_for(today.isoformat()))
-    last = get_last_log()
+    last = current_log(today.isoformat())
     pf = last.get("pelvic_floor_tightness") or 1
     recovery = plan.get("cardio_type") == "recovery"
     if s.kind not in ("strength", "core", "mobility", "cardio"):
@@ -418,6 +433,18 @@ def add_second_session(s: SecondSession):
         planedit.save(today.isoformat(), allowed)
     return {"ok": bool(allowed), "added": len(allowed), "rejected": rejected,
             "message": None if allowed else "Nothing safe could be added with your equipment."}
+
+
+class CheckIn(BaseModel):
+    kidney: int
+    pelvic_floor: int
+
+
+@app.post("/api/checkin")
+def save_checkin(c: CheckIn):
+    """This morning's flank and pelvic floor scores. Today's plan is built from these instead of last session's."""
+    history.save_checkin(DB_PATH, c.kidney, c.pelvic_floor)
+    return {"ok": True, "checkin": history.get_checkin(DB_PATH)}
 
 
 @app.post("/api/plan/reset")

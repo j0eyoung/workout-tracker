@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 - Morning Check-In, Equipment Without Symptom Limits
+
+### 🌟 Features
+* **"How do you feel today?" on the Today tab.** Two sliders, left kidney / flank and pelvic floor tightness. Today's plan is built from your check-in instead of how you felt after your last workout, so a rough night changes the plan right away (a kidney score above 5 still makes today a recovery day, the cool-down follows your scores, and so on). You can change it any time, and the coach sees it. The sliders at the end of your workout start from your check-in.
+
+### 🔧 Changes
+* **The vibration board and inversion table are no longer held back by symptoms.** They help when you are tight, so the vibration board primer shows up on strength days and a board or inversion table session is added to the cool-down every other day, and on every tight or recovery day. The cards still say to keep the board on the lowest setting, the table at a shallow angle, and to stop at dizziness or sharp pain.
 ## 0.7.2 - Varied Cool-Downs, Recovery Equipment, Check Marks For Holds
 
 ### 🌟 Features

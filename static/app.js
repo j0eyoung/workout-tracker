@@ -57,7 +57,7 @@ const state = {
   ],
   coachBusy: false,
   mind: null, mindFilter: "all", mindQ: "",
-  week: null, weekOffset: 0, coachDraft: "", secondOpen: false,
+  week: null, weekOffset: 0, coachDraft: "", secondOpen: false, ck: null, ckEdit: false,
   garmin: null, garminMsg: "",
   voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
@@ -123,6 +123,10 @@ function loadPlan(plan) {
   }
   state.extras = Object.keys(state.sets).filter((n) => !plan.strength.some((e) => e.name === n));
   state.finish = { ...FINISH_DEFAULTS, ...store.get(finishKey(), {}) };
+  if (plan.checkin && !store.get(finishKey(), null)) {   // start the finish sliders from this morning's check-in
+    state.finish.kidney = plan.checkin.kidney;
+    state.finish.pf = plan.checkin.pelvic_floor;
+  }
   $date.textContent = formatDate(plan.date);
 }
 
@@ -229,6 +233,30 @@ function slider(id, label, help) {
   </div>`;
 }
 
+// Morning check-in: how the flank and pelvic floor feel today. Today's plan is built from these.
+function ckSlider(key, label) {
+  const v = state.ck[key];
+  return `<div class="slider"><div class="lbl"><span>${label}</span><span class="val" id="ckval-${key}">${v}/10</span></div>
+    <input type="range" min="1" max="10" step="1" value="${v}" data-ck="${key}" aria-label="${label}"></div>`;
+}
+
+function checkinCard(p) {
+  const saved = p.checkin;
+  if (saved && !state.ckEdit) {
+    const rec = p.cardio?.type === "recovery";
+    return `<div class="card"><div><strong>Today's check-in:</strong> kidney ${esc(saved.kidney)}/10 · pelvic floor ${esc(saved.pelvic_floor)}/10
+      <button type="button" class="btn link small" data-act="checkin-edit">Change</button></div>
+      ${rec ? `<div class="sub">Your scores made today a recovery day.</div>` : ""}</div>`;
+  }
+  state.ck ||= { kidney: saved?.kidney ?? p.last_scores?.kidney ?? 1, pelvic_floor: saved?.pelvic_floor ?? p.last_scores?.pelvic_floor ?? 1 };
+  return `<div class="card"><h3>How do you feel today?</h3>
+    <p class="sub" style="margin:2px 0 6px">Today's plan adapts to this. Skip it and the plan uses how you felt after your last workout.</p>
+    ${ckSlider("kidney", "Left kidney / flank tightness")}
+    ${ckSlider("pelvic_floor", "Pelvic floor tightness")}
+    <div class="row-actions"><button type="button" class="btn primary" style="width:auto" data-act="checkin-save">Save check-in</button>
+      ${saved ? `<button type="button" class="btn link small" data-act="checkin-cancel">Cancel</button>` : ""}</div></div>`;
+}
+
 function renderToday() {
   const p = state.plan;
   if (!p) {
@@ -238,6 +266,7 @@ function renderToday() {
   const cardio = p.cardio;
   const cardioText = (cardio.text || "").replace(/^\d+ min:\s*/, "");
   $view.innerHTML = `
+    ${checkinCard(p)}
     ${p.coach_changes ? `<div class="small muted">Today's plan has added sessions or coach changes. <button type="button" class="btn link small" data-act="reset-plan">Undo them</button></div>` : ""}
     <h2>1. Daily non-negotiables</h2>
     ${p.warmup.map(warmupCard).join("")}
@@ -1039,6 +1068,19 @@ const actions = {
     store.set("coach", state.coach.slice(-50));
     renderCoach();
   },
+  "checkin-edit"() { state.ckEdit = true; state.ck = null; render(); },
+  "checkin-cancel"() { state.ckEdit = false; state.ck = null; render(); },
+  async "checkin-save"(el) {
+    el.disabled = true;
+    try {
+      await api("api/checkin", { method: "POST", body: JSON.stringify({ kidney: state.ck.kidney, pelvic_floor: state.ck.pelvic_floor }) });
+      state.ckEdit = false;
+      state.ck = null;
+      if (saveTimer) await saveDraft();
+      await refreshPlan();
+      toast("Check-in saved. Today's plan is updated.");
+    } catch { toast("Couldn't save the check-in"); el.disabled = false; }
+  },
   "second-toggle"() { state.secondOpen = !state.secondOpen; render(); },
   async "second-add"(el) {
     el.disabled = true;
@@ -1124,6 +1166,10 @@ $view.addEventListener("input", (e) => {
     const label = document.getElementById(`val-${t.dataset.finish}`);
     if (label) label.textContent = `${t.value}/10`;
     store.set(finishKey(), state.finish);
+  } else if (t.dataset.ck) {
+    state.ck[t.dataset.ck] = Number(t.value);
+    const label = document.getElementById(`ckval-${t.dataset.ck}`);
+    if (label) label.textContent = `${t.value}/10`;
   } else if (t.id === "mind-q") {
     state.mindQ = t.value.trim().toLowerCase();
     clearTimeout(searchTimer);

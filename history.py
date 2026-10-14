@@ -26,7 +26,34 @@ SCHEMA = [
         data JSON,               -- {"tracker": [rows], "checks": {item: bool}}
         updated_at TEXT
     )""",
+    """CREATE TABLE IF NOT EXISTS daily_checkins (
+        date TEXT PRIMARY KEY,   -- local date
+        kidney INTEGER,          -- how the left flank feels this morning, 1-10
+        pelvic_floor INTEGER,    -- pelvic floor tightness, 1-10
+        updated_at TEXT
+    )""",
 ]
+
+
+def save_checkin(db_path, kidney, pelvic_floor, date=None):
+    conn = sqlite3.connect(db_path)
+    conn.execute("INSERT OR REPLACE INTO daily_checkins (date, kidney, pelvic_floor, updated_at) VALUES (?, ?, ?, ?)",
+                 (date or local_today(), max(1, min(10, int(kidney))), max(1, min(10, int(pelvic_floor))),
+                  local_now().isoformat()))
+    conn.commit()
+    conn.close()
+
+
+def get_checkin(db_path, date=None):
+    """Today's morning check-in as {"kidney", "pelvic_floor"}, or None."""
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute("SELECT kidney, pelvic_floor FROM daily_checkins WHERE date = ?",
+                           (date or local_today(),)).fetchone()
+    except sqlite3.OperationalError:   # table not created yet on an old database
+        row = None
+    conn.close()
+    return {"kidney": row[0], "pelvic_floor": row[1]} if row else None
 
 
 def local_now():

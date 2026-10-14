@@ -566,10 +566,9 @@ DEFAULT_GEAR_NOTES = (
     "Free weights: dumbbells 5-35 lb; barbell with six 25 lb bumper plates, about ten 2.5 lb plates and a 10 lb "
     "bumper set; EZ-curl bar; 15 lb kettlebell; bands 30, 50 and 70 lb.\n"
     "Recovery: vibration board, inversion table, Rage recovery set (foam roller, massage ball). "
-    "Joe's PT said the vibration board could help: use it for recovery, low settings, short sessions, and only on "
-    "low-symptom days (skip it when kidney pain or pelvic floor tightness is high). "
-    "The inversion table is also approved by his PT: use it for gentle spinal decompression after training, "
-    "short sessions at a shallow angle, and skip it when symptoms are high."
+    "Joe's PT said the vibration board could help, and Joe says both it and the inversion table are fine at any "
+    "symptom level and helpful when he is tight: use the vibration board for recovery on the lowest setting in short "
+    "sessions, and the inversion table for gentle decompression at a shallow angle after training."
 )
 
 # App settings live in one JSON file next to the database so they survive updates and can grow
