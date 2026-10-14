@@ -184,13 +184,15 @@ function strengthCard(ex) {
     <h3>${esc(ex.name)}</h3>
     <div class="sub">${esc(ex.dose || "Your own exercise")}${sets.length ? ` · ${done}/${plural(sets.length, "set")} done` : ""}</div>
     ${ex.why ? `<div class="why">${esc(ex.why)}</div>` : ""}
+    ${ex.bothered ? `<div class="warning" style="margin-top:6px">${esc(ex.bothered)}</div>` : ""}
     ${ex.progress ? `<div class="progress"><span class="muted">Last time (${esc(formatDate(ex.progress.date))}):</span> ${esc(ex.progress.last)}<br>
       <strong>${esc(ex.progress.note)}</strong></div>` : ""}
     ${hasHowTo(ex) ? toggleButton(key) + (state.open.has(key) ? howTo(ex) : "") : ""}
     ${ex.hold ? `<p class="small muted" style="margin:6px 0">Tap a number to start a ${esc(ex.hold_secs || 30)} s hold. It ticks itself off and starts your rest.</p>` : ""}
     <div class="sets">${ex.hold ? holdRow(ex.name, sets) : sets.map((s, i) => setRow(ex.name, s, i)).join("")}</div>
     <div class="row-actions"><button type="button" class="btn small" data-act="add-set" data-name="${esc(ex.name)}">${ex.hold ? "+ Add hold" : "+ Add set"}</button>
-      ${ex.hold && sets.length > 1 ? `<button type="button" class="btn link small" data-act="remove-set" data-name="${esc(ex.name)}" data-i="${sets.length - 1}">Remove last</button>` : ""}</div>
+      ${ex.hold && sets.length > 1 ? `<button type="button" class="btn link small" data-act="remove-set" data-name="${esc(ex.name)}" data-i="${sets.length - 1}">Remove last</button>` : ""}
+      ${ex.dose ? `<button type="button" class="btn link small muted-link" data-act="bothered" data-name="${esc(ex.name)}">Bothered me</button>` : ""}</div>
   </div>`;
 }
 
@@ -696,6 +698,12 @@ async function renderSettings() {
       <input type="date" id="season" class="code-input" style="width:100%" value="${esc(s.season_start)}">
       <div class="row-actions"><button type="button" class="btn small" data-act="save-season">Save date</button></div>
     </div>
+    ${s.paused?.length ? `<h2>Paused exercises</h2>
+    <div class="card">
+      <p class="sub" style="margin:0 0 8px">Exercises you marked "Bothered me". They sit out until the date, then come back with a go-lighter reminder.</p>
+      ${s.paused.map((x) => `<div class="paused-row"><span>${esc(x.name)} <span class="muted small">until ${esc(formatDate(x.until))}</span></span>
+        <button type="button" class="btn small" data-act="unpause" data-name="${esc(x.name)}">Bring back</button></div>`).join("")}
+    </div>` : ""}
     <h2>Equipment</h2>
     <div class="card">
       <p class="sub" style="margin:0 0 10px">Daily plans only use what's ticked. Barbell moves stay out of your plans for your kidney either way.</p>
@@ -1160,6 +1168,26 @@ const actions = {
     if (m) m.dismissed = true;
     store.set("coach", state.coach.slice(-50));
     renderCoach();
+  },
+  async bothered(el) {
+    const name = el.dataset.name;
+    if (!confirm(`Pause "${name}" for 2 weeks?\n\nIt comes back after that with a reminder to go lighter. You can bring it back sooner in Settings.`)) return;
+    try {
+      const r = await api("api/exercise/pause", { method: "POST", body: JSON.stringify({ name }) });
+      if (saveTimer) await saveDraft();
+      state.settings = null;
+      await refreshPlan();
+      toast(`Paused until ${formatDate(r.until)}`);
+    } catch { toast("Couldn't pause it"); }
+  },
+  async unpause(el) {
+    try {
+      await api("api/exercise/unpause", { method: "POST", body: JSON.stringify({ name: el.dataset.name }) });
+      state.settings = null;
+      refreshPlan().catch(() => {});
+      render();
+      toast("It's back in your plans");
+    } catch { toast("Couldn't bring it back"); }
   },
   "checkin-edit"() { state.ckEdit = true; state.ck = null; render(); },
   "checkin-cancel"() { state.ckEdit = false; state.ck = null; render(); },

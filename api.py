@@ -34,7 +34,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.8.2"
+VERSION = "0.8.3"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -143,15 +143,57 @@ def current_log(date_iso=None):
     return last
 
 
+# --- "Bothered me": an exercise sits out for a while, then comes back with a reminder to go lighter ----------------
+
+PAUSE_DAYS = 14
+BACK_NOTE_DAYS = 14
+
+
+def paused(date_iso=None):
+    """{name: {"since", "until"}} for exercises sitting out on this date."""
+    d = date_iso or history.local_today()
+    return {n: p for n, p in (library.load_settings().get("paused") or {}).items() if p["until"] >= d}
+
+
+def recently_back(date_iso=None):
+    """Exercises whose pause ended in the last two weeks: {name: since}."""
+    d = datetime.date.fromisoformat(date_iso or history.local_today())
+    out = {}
+    for n, p in (library.load_settings().get("paused") or {}).items():
+        until = datetime.date.fromisoformat(p["until"])
+        if until < d <= until + datetime.timedelta(days=BACK_NOTE_DAYS):
+            out[n] = p["since"]
+    return out
+
+
+def _drop_paused(ops):
+    """Removes 'add' changes for paused exercises: (kept ops, reasons)."""
+    resting = paused()
+    lower = {n.lower(): (n, p) for n, p in resting.items()}
+    kept, why = [], []
+    for op in ops:
+        hit = lower.get(str(op.get("name") or "").strip().lower()) if op.get("op") == "add" else None
+        if hit:
+            why.append(f"{hit[0]} is paused until {datetime.date.fromisoformat(hit[1]['until']):%b %d} because it bothered you.")
+        else:
+            kept.append(op)
+    return kept, why
+
+
 def _generate(date_iso):
     """The engine's workout for a date, following that day's place in the weekly plan."""
     goals = selected_sports()
     d = datetime.date.fromisoformat(date_iso)
     day = planner.day_plan(d, goals)
+    resting = paused(date_iso)
+    entries = [e for e in get_library()["entries"] if e["name"] not in resting]
     w = engine.generate_next_workout(
-        current_log(date_iso), today=d, library=get_library()["entries"], equipment=library.selected_equipment(),
+        current_log(date_iso), today=d, library=entries, equipment=library.selected_equipment(),
         goals=goals, focus=day["focus"], cardio_type=day["cardio_type"], theme=day["theme"],
         season_phase=day.get("season_phase"))
+    if resting:   # the fixed exercises (wall sits and so on) sit out too
+        w["strength"] = [n for n in w["strength"] if n not in resting]
+        w["accessories"] = [a for a in w.get("accessories", []) if a["name"] not in resting]
     if day["phase"] == "Easy week" and day["focus"] == "strength" and w.get("accessories"):
         last = w["accessories"].pop()          # easy week: one fewer extra
         if last["name"] in w["strength"]:
@@ -191,6 +233,10 @@ def index():
 
 def with_progress(card, last, phase):
     """Adds last time's sets and a suggested weight and reps to an exercise card."""
+    back = recently_back()
+    if card["name"] in back:
+        card["bothered"] = (f"This bothered you on {datetime.date.fromisoformat(back[card['name']]):%b %d} and sat out for a while. "
+                            "Go lighter today, and tap 'Bothered me' again if it still does.")
     date, sets = history.last_session(DB_PATH, card["name"])
     suggest = progression.suggest_hold if card.get("hold") else progression.suggest
     card["progress"] = suggest(date, sets, phase, last.get("rpe"), last.get("kidney_flank_pain"),
@@ -340,16 +386,22 @@ def ask_coach(m: CoachMessage):
     ck = history.get_checkin(DB_PATH)
     ck_line = (f"TODAY'S MORNING CHECK-IN (Joe's own scores, 1-10): left kidney/flank {ck['kidney']}, pelvic floor tightness "
                f"{ck['pelvic_floor']}. Use these for today.") if ck else "No morning check-in yet today."
-    context = "\n\n".join([planedit.INSTRUCTIONS, ck_line, planedit.context(plan, lib["entries"], library.selected_equipment(), selected_sports()),
-                           planedit.week_context(today, selected_sports())])
+    resting = paused()
+    pause_line = ("PAUSED EXERCISES (they bothered Joe; do not suggest them until the date): " +
+                  "; ".join(f"{n} until {p['until']}" for n, p in resting.items())) if resting else ""
+    entries = [e for e in lib["entries"] if e["name"] not in resting]
+    context = "\n\n".join(x for x in [planedit.INSTRUCTIONS, ck_line, pause_line,
+                                      planedit.context(plan, entries, library.selected_equipment(), selected_sports()),
+                                      planedit.week_context(today, selected_sports())] if x)
     info = _season(today)
     season_text = (f"{info['opening']} ({info['days']} days away)" if info["days"] > 0 else f"{info['opening']} (it has opened)") + \
         f". Phase: {info['phase']}: {info['text']}" if info else ""
     reply, error = coach.ask(m.message, m.recent, plan_context=context, season=season_text, sports=selected_sports())
     reply, data = planedit.extract(reply)
-    ops = (data or {}).get("changes") or []
+    ops, pause_rejects = _drop_paused((data or {}).get("changes") or [])
     changes, rejected = planedit.validate({"changes": [c for c in ops if c.get("op") != "day"]}, plan, lib["by_name"],
                                           library.selected_equipment())
+    rejected = pause_rejects + rejected
     days, days_bad = planedit.validate_days([c for c in ops if c.get("op") == "day"], today, selected_sports())
     return {"reply": reply, "error": error, "rejected": rejected + days_bad,
             "changes": [dict(c, label=planedit.label(c)) for c in changes + days]}
@@ -365,9 +417,11 @@ def apply_changes(p: PlanChanges):
     lib = get_library()
     today = history.local_today()
     plan = planedit.apply(_generate(today), planedit.overrides_for(today))
-    day_ops = [c for c in p.changes if c.get("op") == "day"]
-    allowed, rejected = planedit.validate({"changes": [c for c in p.changes if c.get("op") != "day"]}, plan,
+    ops, pause_rejects = _drop_paused(p.changes)
+    day_ops = [c for c in ops if c.get("op") == "day"]
+    allowed, rejected = planedit.validate({"changes": [c for c in ops if c.get("op") != "day"]}, plan,
                                           lib["by_name"], library.selected_equipment())
+    rejected = pause_rejects + rejected
     days_ok, days_bad = planedit.validate_days(day_ops, datetime.date.fromisoformat(today), selected_sports())
     if allowed:
         planedit.save(today, allowed)
@@ -448,7 +502,9 @@ def add_second_session(s: SecondSession):
         else:
             slots = [("mobility", "Hip and spine mobility"), ("mobility", "Rib and pelvic mobility")]
             label = "mobility"
-        picks = engine_mod.pick_accessories(lib["entries"], set(equipment) | {"bodyweight"}, today, recovery,
+        resting = paused()
+        picks = engine_mod.pick_accessories([e for e in lib["entries"] if e["name"] not in resting],
+                                            set(equipment) | {"bodyweight"}, today, recovery,
                                             set(plan["strength"]), selected_sports(), slots=slots, seed="session2")
         changes = [{"op": "add", "name": p["name"], "why": f"second session, {label}"} for p in picks]
     allowed, rejected = planedit.validate({"changes": changes}, plan, lib["by_name"], equipment)
@@ -456,6 +512,30 @@ def add_second_session(s: SecondSession):
         planedit.save(today.isoformat(), allowed)
     return {"ok": bool(allowed), "added": len(allowed), "rejected": rejected,
             "message": None if allowed else "Nothing safe could be added with your equipment."}
+
+
+class PauseRequest(BaseModel):
+    name: str
+    days: int = PAUSE_DAYS
+
+
+@app.post("/api/exercise/pause")
+def pause_exercise(p: PauseRequest):
+    """'Bothered me': the exercise sits out for a while (not forever), then returns with a go-lighter note."""
+    today = datetime.date.fromisoformat(history.local_today())
+    days = max(1, min(p.days, 60))
+    all_p = library.load_settings().get("paused") or {}
+    all_p[p.name.strip()[:120]] = {"since": today.isoformat(), "until": (today + datetime.timedelta(days=days - 1)).isoformat()}
+    library.save_settings({"paused": all_p})
+    return {"ok": True, "until": all_p[p.name.strip()[:120]]["until"]}
+
+
+@app.post("/api/exercise/unpause")
+def unpause_exercise(p: PauseRequest):
+    all_p = library.load_settings().get("paused") or {}
+    all_p.pop(p.name, None)
+    library.save_settings({"paused": all_p})
+    return {"ok": True}
 
 
 class CheckIn(BaseModel):
@@ -613,6 +693,7 @@ def get_settings():
             "media_base_url": library.load_settings().get("media_base_url", ""), "media_private": media.configured(),
             "sports": selected_sports(), "sport_options": [{"id": i, "label": l} for i, l in SPORT_OPTIONS],
             "season_start": library.load_settings().get("season_start", ""),
+            "paused": [{"name": n, "since": p["since"], "until": p["until"]} for n, p in sorted(paused().items())],
             "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES)}
 
 

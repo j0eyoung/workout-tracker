@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.3 - "Bothered Me"
+
+### 🌟 Features
+* **"Bothered me" on every exercise.** Tap it and that exercise sits out of your plans for 2 weeks (not forever). It is left out of daily picks, second sessions and the coach's suggestions while it rests.
+* **It comes back with a reminder.** For two weeks after it returns, its card says it bothered you and to go lighter. Tap "Bothered me" again if it still does.
+* **Paused exercises in Settings** with the date each one comes back and a "Bring back" button.
+* The coach is told which exercises are paused and why.
 ## 0.8.2 - Timer Bar Fix
 
 ### 🔧 Changes
