@@ -470,11 +470,22 @@ def cards():
             "media_base": media_base(), "qigong_credit": QIGONG_CREDIT}
 
 
-def cooldown(kidney=0, pelvic_floor=0, minutes=8):
-    """A short cool-down: a few gentle poses, or breathing only when symptoms are high."""
+def _breathing(c):
+    return [y for y in c["yoga"] if y["category"] == "breath" and y["cooldown"]]
+
+
+def cooldown(kidney=0, pelvic_floor=0, minutes=8, focus="strength"):
+    """A short wind-down that follows the day: yoga after strength, Baduanjin qigong and breathing after cardio,
+    restorative yoga and breathing on recovery and rest days. Rest and breathing only when symptoms are high."""
     c = cards()
-    pool = [y for y in c["yoga"] if y["cooldown"]]
     high = (kidney or 0) > 6 or (pelvic_floor or 0) > 7
+    breathing = _breathing(c)
+    if high or focus in ("recovery", "rest"):
+        calm = [y for y in c["yoga"] if y["cooldown"] and y["category"] == "restorative"]
+        return [dict(y) for y in (calm[:3] + breathing[:2])]
+    if focus == "cardio":
+        return [dict(q) for q in c["qigong"]] + [dict(y) for y in breathing[:1]]
+    pool = [y for y in c["yoga"] if y["cooldown"]]
     if high:
         pool = [y for y in pool if y["category"] == "restorative"]
     else:
@@ -488,7 +499,11 @@ def cooldown(kidney=0, pelvic_floor=0, minutes=8):
     return [dict(y, dose=y["dose"]) for y in picks]
 
 
-def cooldown_note(kidney=0, pelvic_floor=0):
+def cooldown_note(kidney=0, pelvic_floor=0, focus="strength"):
     if (kidney or 0) > 6 or (pelvic_floor or 0) > 7:
         return "Symptoms were high last time, so this is rest and breathing only."
+    if focus == "cardio":
+        return "Baduanjin qigong, the eight moves in kidney-safe form, then a minute of belly breathing. About 10 minutes. Skip any move you like."
+    if focus in ("recovery", "rest"):
+        return "A recovery day: restful poses and breathing. A guided meditation (Mind & Body tab) fits well too."
     return "A gentle 8-minute wind-down chosen for your kidney and pelvic floor. Skip it any day you like."

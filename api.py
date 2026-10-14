@@ -33,7 +33,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -165,6 +165,9 @@ def plan():
     last = get_last_log()
     kidney, pf = last.get("kidney_flank_pain"), last.get("pelvic_floor_tightness")
     phase = planner.phase(datetime.date.fromisoformat(today))
+    day_focus = planner.day_plan(datetime.date.fromisoformat(today), selected_sports())["focus"]
+    if w.get("cardio_type") == "recovery":
+        day_focus = "recovery"                     # a high kidney score turns any day into recovery
     season = _season(datetime.date.fromisoformat(today))
     if season and season["phase"] in ("Taper", "Opening day"):
         phase = "Easy week"          # opening week: hold loads, one set fewer
@@ -172,7 +175,8 @@ def plan():
         "season": season,
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
-        "cooldown": {"note": mindbody.cooldown_note(kidney, pf), "cards": mindbody.cooldown(kidney, pf)},
+        "cooldown": {"note": mindbody.cooldown_note(kidney, pf, day_focus), "cards": mindbody.cooldown(kidney, pf, focus=day_focus),
+                     "title": {"cardio": "Qigong cool-down", "recovery": "Recovery wind-down", "rest": "Recovery wind-down"}.get(day_focus, "Cool-down")},
         "date": today,
         "warmup": [how_to(n) for n in w["warmup"]],
         "strength": [with_progress(how_to(n, why.get(n)), last, phase) for n in w["strength"]],

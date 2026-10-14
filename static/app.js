@@ -248,7 +248,7 @@ function renderToday() {
       ${pictures(cardio.images)}
     </div>
 
-    ${p.cooldown?.cards?.length ? `<h2>4. Cool-down <span class="muted">(optional)</span></h2>
+    ${p.cooldown?.cards?.length ? `<h2>4. ${esc(p.cooldown.title || "Cool-down")} <span class="muted">(optional)</span></h2>
     <p class="small muted" style="margin-top:0">${esc(p.cooldown.note)}</p>
     ${p.cooldown.cards.map(mindCard).join("")}` : ""}
 

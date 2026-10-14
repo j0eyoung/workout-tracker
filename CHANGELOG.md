@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 - The Cool-Down Follows The Day
+
+### 🔧 Changes
+* **Today's cool-down now matches the Week tab.** After strength it is the gentle yoga wind-down as before. On a **cardio day it is the Baduanjin qigong** (all eight moves in their kidney-safe form, with pictures) followed by a minute of belly breathing, instead of yoga. On recovery and rest days it is restorative poses and breathing. A high kidney or pelvic floor score still limits it to rest and breathing only.
 ## 0.7.0 - The Week Adapts When You Skip A Day
 
 ### 🌟 Features
