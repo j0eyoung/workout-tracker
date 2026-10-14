@@ -192,6 +192,7 @@ function strengthCard(ex) {
     <div class="sets">${ex.hold ? holdRow(ex.name, sets) : sets.map((s, i) => setRow(ex.name, s, i)).join("")}</div>
     <div class="row-actions"><button type="button" class="btn small" data-act="add-set" data-name="${esc(ex.name)}">${ex.hold ? "+ Add hold" : "+ Add set"}</button>
       ${ex.hold && sets.length > 1 ? `<button type="button" class="btn link small" data-act="remove-set" data-name="${esc(ex.name)}" data-i="${sets.length - 1}">Remove last</button>` : ""}
+      ${ex.dose && !(state.plan.session2 || []).includes(ex.name) ? `<button type="button" class="btn link small muted-link" data-act="swap" data-name="${esc(ex.name)}">Swap</button>` : ""}
       ${ex.dose ? `<button type="button" class="btn link small muted-link" data-act="bothered" data-name="${esc(ex.name)}">Bothered me</button>` : ""}</div>
   </div>`;
 }
@@ -588,6 +589,7 @@ async function renderWeek() {
     </div>`).join("")}
     <div class="row-actions">
       <button type="button" class="btn small" data-act="week-ask">Ask the coach to adjust my week</button>
+      <button type="button" class="btn small" data-act="week-recap">Weekly recap</button>
       <button type="button" class="btn link small" data-act="week-reset">Undo coach changes</button>
     </div>
     <p class="small muted">Each day still adapts to how you feel: a high kidney score always turns the day into recovery.</p>`;
@@ -1110,6 +1112,14 @@ const actions = {
     history.replaceState(null, "", "#coach");
     showTab("coach");
   },
+  "week-recap"() {
+    // the coach writes it from your logged workouts, symptoms, Garmin data and the plan
+    state.coachDraft = "Write my weekly recap: what I did this week compared with the plan, how my kidney and pelvic floor "
+      + "scores trended, any personal bests, and the one or two things to change next week. Keep it short.";
+    history.replaceState(null, "", "#coach");
+    showTab("coach");
+    setTimeout(() => sendCoach(), 50);
+  },
   async "week-reset"() {
     if (!confirm("Remove the coach's changes to this week and next?")) return;
     await api("api/week/reset", { method: "POST" });
@@ -1259,6 +1269,16 @@ const actions = {
       renderSettings();
       toast("Saved");
     } catch { toast("Couldn't save"); }
+  },
+  async swap(el) {
+    el.disabled = true;
+    try {
+      const r = await api("api/plan/swap", { method: "POST", body: JSON.stringify({ name: el.dataset.name }) });
+      if (!r.ok) { toast(r.message); el.disabled = false; return; }
+      if (saveTimer) await saveDraft();
+      await refreshPlan();
+      toast(`Swapped for ${r.name}`);
+    } catch { toast("Couldn't swap it"); el.disabled = false; }
   },
   async bothered(el) {
     const name = el.dataset.name;

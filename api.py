@@ -6,6 +6,7 @@ page only ever uses relative URLs (e.g. fetch("api/plan")).
 """
 import datetime
 import os
+import random
 import re
 import sqlite3
 import threading
@@ -36,7 +37,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.9.1"
+VERSION = "0.9.2"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -530,6 +531,44 @@ def add_second_session(s: SecondSession):
         planedit.save(today.isoformat(), allowed)
     return {"ok": bool(allowed), "added": len(allowed), "rejected": rejected,
             "message": None if allowed else "Nothing safe could be added with your equipment."}
+
+
+_GUIDE_GOALS = {"Wall Sits (45s)": "legs", "Banded Lateral Walks": "legs", "Wall Tibialis Raises": "legs",
+                "Supine Heel Slides": "core", "Wall-Push Deadbugs": "core"}
+
+
+class SwapRequest(BaseModel):
+    name: str
+
+
+@app.post("/api/plan/swap")
+def swap_exercise(s: SwapRequest):
+    """A different safe exercise for the same muscle group, for today only."""
+    lib = get_library()
+    today = history.local_today()
+    plan = planedit.apply(_generate(today), planedit.overrides_for(today))
+    if s.name not in plan["strength"]:
+        raise HTTPException(404, "That exercise isn't in today's plan.")
+    entry = lib["by_name"].get(s.name)
+    goals = [g for g in (entry["goal_tags"] if entry else []) if g in ("legs", "core", "upper back", "mobility", "balance")]
+    goal = goals[0] if goals else _GUIDE_GOALS.get(s.name, "core")
+    equipment = set(library.selected_equipment()) | {"bodyweight"}
+    resting = paused()
+    pool = [e for e in lib["entries"] if e["safe"] and goal in e["goal_tags"] and e["equipment"] in equipment
+            and e["name"] not in plan["strength"] and e["name"] not in resting and e["name"] != s.name]
+    if goal == "core":
+        pool = [e for e in pool if e["level"] == "beginner"] or pool   # stay gentle with the deep core
+    pool = [e for e in pool if e["images"] and e["instructions"]] or pool
+    if not pool:
+        return {"ok": False, "message": "No other safe exercise for that muscle group with your equipment."}
+    pick = random.choice(pool)
+    changes = [{"op": "remove", "name": s.name, "why": f"swapped for {pick['name']}"},
+               {"op": "add", "name": pick["name"], "why": f"swapped in for {s.name}"}]
+    allowed, rejected = planedit.validate({"changes": changes}, plan, lib["by_name"], library.selected_equipment())
+    if len(allowed) < 2:
+        return {"ok": False, "message": rejected[0] if rejected else "Couldn't swap that one."}
+    planedit.save(today, allowed)
+    return {"ok": True, "name": pick["name"]}
 
 
 class PauseRequest(BaseModel):

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.2 - Swap Button and Weekly Recap
+
+### 🌟 Features
+* **"Swap" on every exercise card** picks a different safe exercise for the same muscle group, for today only, using your equipment and the same kidney and pelvic floor safety filter (paused exercises are never picked). Handy when a machine is busy or a move just doesn't feel right. Tap again for another option; "Undo them" at the top of Today brings back the original.
+* **"Weekly recap" on the Week tab** asks the coach for a short summary of your week: what you did compared with the plan, how your kidney and pelvic floor scores trended, any personal bests, and what to change next week.
 ## 0.9.1 - Home Assistant Sensors and Morning Reminder
 
 ### 🌟 Features
