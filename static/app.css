@@ -103,6 +103,7 @@ h2:first-child { margin-top: 6px; }
   background: var(--card); border: 2px solid var(--accent); border-radius: 16px; padding: 10px 14px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
+.timerbar[hidden] { display: none; }
 .timerbar.rest { border-color: var(--ok); }
 .timer-label { font-size: 0.85rem; color: var(--muted); grid-column: 1; }
 .timer-time { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; grid-column: 1; line-height: 1; }

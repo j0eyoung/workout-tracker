@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2 - Timer Bar Fix
+
+### 🔧 Changes
+* Fixed the timer bar showing up empty when no timer was running.
 ## 0.8.1 - Hold Timers, Rest Timers, Holds That Grow
 
 ### 🌟 Features
