@@ -97,6 +97,9 @@ h2:first-child { margin-top: 6px; }
 /* Set rows: tick, set number, lbs, reps, remove */
 .sets { margin-top: 10px; display: grid; gap: 8px; }
 .set { display: grid; grid-template-columns: 44px 30px 1fr 1fr 36px; gap: 8px; align-items: center; }
+.holds { display: flex; gap: 10px; flex-wrap: wrap; }
+.holdbtn { min-width: 60px; height: 52px; border-radius: 14px; border: 2px solid var(--muted); background: none; font-weight: 800; font-size: 1.1rem; color: var(--muted); cursor: pointer; }
+.holdbtn.on { background: var(--ok); border-color: var(--ok); color: #06210f; }
 .set.noweight { grid-template-columns: 44px 30px 1fr 36px; }
 .set .done {
   height: 44px; border-radius: 10px; border: 2px solid var(--muted); background: none;

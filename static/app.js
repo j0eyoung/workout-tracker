@@ -183,9 +183,16 @@ function strengthCard(ex) {
     ${ex.progress ? `<div class="progress"><span class="muted">Last time (${esc(formatDate(ex.progress.date))}):</span> ${esc(ex.progress.last)}<br>
       <strong>${esc(ex.progress.note)}</strong></div>` : ""}
     ${hasHowTo(ex) ? toggleButton(key) + (state.open.has(key) ? howTo(ex) : "") : ""}
-    <div class="sets">${sets.map((s, i) => setRow(ex.name, s, i)).join("")}</div>
-    <div class="row-actions"><button type="button" class="btn small" data-act="add-set" data-name="${esc(ex.name)}">+ Add set</button></div>
+    <div class="sets">${ex.hold ? holdRow(ex.name, sets) : sets.map((s, i) => setRow(ex.name, s, i)).join("")}</div>
+    <div class="row-actions"><button type="button" class="btn small" data-act="add-set" data-name="${esc(ex.name)}">${ex.hold ? "+ Add hold" : "+ Add set"}</button>
+      ${ex.hold && sets.length > 1 ? `<button type="button" class="btn link small" data-act="remove-set" data-name="${esc(ex.name)}" data-i="${sets.length - 1}">Remove last</button>` : ""}</div>
   </div>`;
+}
+
+// Timed holds (wall sits, planks, stretches): one check mark per hold, no reps to type
+function holdRow(name, sets) {
+  return `<div class="holds">${sets.map((s, i) => `<button type="button" class="holdbtn${s.done ? " on" : ""}" data-act="done"
+    data-name="${esc(name)}" data-i="${i}" aria-pressed="${s.done}" aria-label="Hold ${i + 1} done">${s.done ? "✓" : i + 1}</button>`).join("")}</div>`;
 }
 
 function setRow(name, s, i) {

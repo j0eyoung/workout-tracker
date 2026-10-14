@@ -6,6 +6,7 @@ page only ever uses relative URLs (e.g. fetch("api/plan")).
 """
 import datetime
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -33,7 +34,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -64,8 +65,17 @@ def library_card(e, why=None):
         "Filtered out of your plans: " + "; ".join(library.FLAG_REASONS.get(f, f) for f in e["constraint_tags"]) + ".",
         "muscles": e["muscles"], "equipment": e["equipment"], "level": e["level"],
         "sources": [library.SOURCE_NAMES.get(s, s) for s in e["sources"]],
-        "weighted": e["equipment"] not in WEIGHTLESS_EQUIPMENT,
+        "weighted": e["equipment"] not in WEIGHTLESS_EQUIPMENT and not is_hold(dose, e["name"]),
+        "hold": is_hold(dose, e["name"]),
     }
+
+
+_HOLD = re.compile(r"\bhold\b|\b\d+(?:-\d+)?\s*(?:s|sec|secs|seconds|min|mins)\b", re.I)
+
+
+def is_hold(dose, name):
+    """Timed holds (wall sits, planks, stretches): tracked as check marks, one per hold, not reps."""
+    return bool(_HOLD.search(f"{dose or ''} {name}")) or any(w in name.lower() for w in ("plank", "wall sit"))
 
 
 # Equipment where you don't track pounds: bodyweight, bands (tension, not lbs), rings, sliders, and so on
@@ -79,7 +89,8 @@ def how_to(name, why=None):
     if guide:
         return {"name": name, "dose": guide["dose"], "sets": guide.get("sets", 3), "why": why,
                 "images": guide.get("images", []), "image_note": guide.get("image_note"),
-                "steps": guide["cues"], "tips": [], "safe": True, "warning": None, "weighted": False}
+                "steps": guide["cues"], "tips": [], "safe": True, "warning": None, "weighted": False,
+                "hold": is_hold(guide["dose"], name)}
     entry = get_library()["by_name"].get(name)
     if entry:
         return library_card(entry, why)
@@ -168,6 +179,12 @@ def plan():
     day_focus = planner.day_plan(datetime.date.fromisoformat(today), selected_sports())["focus"]
     if w.get("cardio_type") == "recovery":
         day_focus = "recovery"                     # a high kidney score turns any day into recovery
+    equipment = library.selected_equipment()
+    cool_cards = mindbody.cooldown(kidney, pf, focus=day_focus, day=today, equipment=equipment)
+    warmup_cards = [how_to(n) for n in w["warmup"]]
+    # Vibration board primer: only on strength days with low symptoms (kidney 3 or less, pelvic floor 6 or less)
+    if day_focus == "strength" and (kidney or 0) <= 3 and (pf or 0) <= 6:
+        warmup_cards += mindbody.tool_cards(equipment, "warmup")
     season = _season(datetime.date.fromisoformat(today))
     if season and season["phase"] in ("Taper", "Opening day"):
         phase = "Easy week"          # opening week: hold loads, one set fewer
@@ -175,10 +192,10 @@ def plan():
         "season": season,
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
-        "cooldown": {"note": mindbody.cooldown_note(kidney, pf, day_focus), "cards": mindbody.cooldown(kidney, pf, focus=day_focus),
+        "cooldown": {"note": mindbody.cooldown_note(kidney, pf, day_focus, cool_cards), "cards": cool_cards,
                      "title": {"cardio": "Qigong cool-down", "recovery": "Recovery wind-down", "rest": "Recovery wind-down"}.get(day_focus, "Cool-down")},
         "date": today,
-        "warmup": [how_to(n) for n in w["warmup"]],
+        "warmup": warmup_cards,
         "strength": [with_progress(how_to(n, why.get(n)), last, phase) for n in w["strength"]],
         "cardio": {"text": w["cardio"], "minutes": w.get("cardio_minutes"), "note": w.get("cardio_note"),
                    "type": w.get("cardio_type"), "images": CARDIO_IMAGES.get(w.get("cardio_type"), [])},

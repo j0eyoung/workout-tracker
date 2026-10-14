@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2 - Varied Cool-Downs, Recovery Equipment, Check Marks For Holds
+
+### 🌟 Features
+* **The cool-down changes every day** instead of repeating. After strength you get a different mix of yoga poses (spine, fold, hips, rest). After cardio it rotates between half of the qigong moves, the other half, all eight, a yoga flow, or a **mix of qigong moves and yoga poses**, always finishing with a breathing practice.
+* **Vibration board and inversion table are in the plan.** A short, lowest-setting **vibration board primer** joins the warm-up on strength days, and about every other day the cool-down includes the **vibration board leg release** or a shallow-angle **inversion table decompression**. They only appear when the equipment is ticked in Settings and your kidney and pelvic floor scores are low, and never on high-symptom days. Each card repeats the safety notes.
+* **Timed holds are tracked with check marks.** Wall sits, planks and timed stretches show one numbered button per hold that turns into a check mark when you finish it, instead of boxes for reps. "+ Add hold" and "Remove last" adjust how many.
 ## 0.7.1 - The Cool-Down Follows The Day
 
 ### 🔧 Changes

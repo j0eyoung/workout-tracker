@@ -3,7 +3,9 @@ exercise library (api.library_card). Written for Joe's constraints: left kidney 
 (no deep twists, deep backbends, compression or inversion-type loading in automatic picks) and a
 hypertonic pelvic floor (nothing that makes him grip or bear down; long slow exhales).
 General wellness guidance, not medical advice. Pictures: Yoga Posture Dataset on Kaggle by Mrinal Tyagi, CC0."""
+import datetime
 import os
+import random
 
 import library
 
@@ -474,36 +476,110 @@ def _breathing(c):
     return [y for y in c["yoga"] if y["category"] == "breath" and y["cooldown"]]
 
 
-def cooldown(kidney=0, pelvic_floor=0, minutes=8, focus="strength"):
-    """A short wind-down that follows the day: yoga after strength, Baduanjin qigong and breathing after cardio,
-    restorative yoga and breathing on recovery and rest days. Rest and breathing only when symptoms are high."""
+# Recovery equipment from Joe's gym. His PT said both can help; they are only offered on low-symptom days, short,
+# and are skipped when equipment is untoggled in Settings.
+_TOOL_WARNING = {
+    "vibration plate": "Lowest setting only and short. Skip it if your kidney area or pelvic floor feels irritated, and step off if you feel dizzy.",
+    "inversion table": "Shallow angle only, short, low-symptom days only. Come up slowly, and stop at any pressure in your head, dizziness or flank discomfort.",
+}
+
+
+def _tool(name, equipment, dose, steps, tip, muscles):
+    return {"name": name, "dose": dose, "sets": 1, "why": None, "images": [], "gallery": [], "image_note": None,
+            "steps": steps + [BREATH], "tips": [tip], "safe": True, "warning": _TOOL_WARNING[equipment],
+            "muscles": muscles, "equipment": equipment, "level": "beginner", "sources": ["Recovery equipment"],
+            "category": "recovery tool", "cooldown": True, "credit": None}
+
+
+def tool_cards(equipment, kind):
+    """Recovery-equipment cards for `kind` ("warmup" or "cooldown"); empty if you don't have the equipment ticked."""
+    equipment = set(equipment or [])
+    out = []
+    if "vibration plate" in equipment:
+        if kind == "warmup":
+            out.append(_tool("Vibration board primer", "vibration plate", "60-90 sec, lowest setting",
+                             ["Stand on the board, feet hip-width apart, knees soft.", "Start it on the lowest setting.",
+                              "Stand for 30 seconds, then do 5 slow, shallow mini-squats.", "Step off slowly when the time is up."],
+                             "A quick wake-up for the legs before strength work. Keep it short.", ["legs", "calves"]))
+        else:
+            out.append(_tool("Vibration board leg release", "vibration plate", "2-3 min, lowest setting",
+                             ["Stand on the board with soft knees, or sit on a chair with your feet on it.", "Start on the lowest setting.",
+                              "Let your calves, thighs and feet relax. Don't grip.", "Step off slowly."],
+                             "Short and easy. More is not better here.", ["calves", "legs"]))
+    if "inversion table" in equipment and kind == "cooldown":
+        out.append(_tool("Inversion table decompression", "inversion table", "1-3 min, shallow angle",
+                         ["Set the table to a shallow angle, about 20 to 30 degrees, nowhere near upside down.",
+                          "Strap in as the table's instructions say and cross your arms over your chest.",
+                          "Hang loosely for 1 to 3 minutes, belly soft.", "Come back up slowly and sit for 30 seconds before standing."],
+                         "Use it after training, never before. Ask your PT about the angle that suits you.", ["spine", "back"]))
+    return out
+
+
+def cooldown(kidney=0, pelvic_floor=0, minutes=8, focus="strength", day=None, equipment=None):
+    """A short wind-down that follows the day and changes every day (seeded by the date, so it is stable all day):
+    yoga after strength, qigong or a yoga flow plus breathing after cardio, restorative yoga and breathing on
+    recovery and rest days. Rest and breathing only when symptoms are high."""
     c = cards()
+    rng = random.Random(str(day or datetime.date.today()))
     high = (kidney or 0) > 6 or (pelvic_floor or 0) > 7
     breathing = _breathing(c)
+    yoga = [y for y in c["yoga"] if y["cooldown"]]
+
+    def by_cat(*cats):
+        return [y for y in yoga if y["category"] in cats]
+
+    tools = [] if high else tool_cards(equipment, "cooldown")
+
+    def with_tool(cards_, prefer=None):
+        # about every other day one piece of recovery equipment is added at the end (never on high-symptom days)
+        if tools and rng.random() < 0.5:
+            pick = [t for t in tools if prefer and prefer in t["name"].lower()] or tools
+            return cards_ + [dict(rng.choice(pick))]
+        return cards_
+
     if high or focus in ("recovery", "rest"):
-        calm = [y for y in c["yoga"] if y["cooldown"] and y["category"] == "restorative"]
-        return [dict(y) for y in (calm[:3] + breathing[:2])]
+        calm = by_cat("restorative")
+        base = [dict(y) for y in (rng.sample(calm, min(3, len(calm))) + rng.sample(breathing, min(2, len(breathing))))]
+        return base if high else with_tool(base, "inversion")
     if focus == "cardio":
-        return [dict(q) for q in c["qigong"]] + [dict(y) for y in breathing[:1]]
-    pool = [y for y in c["yoga"] if y["cooldown"]]
-    if high:
-        pool = [y for y in pool if y["category"] == "restorative"]
-    else:
-        # a calm order: spine wave, folds, hips, then rest
-        order = {"spine": 0, "strength": 1, "forward fold": 2, "hips": 3, "gentle backbend": 4, "restorative": 5}
-        pool.sort(key=lambda y: order.get(y["category"], 3))
-        pool = [y for y in pool if y["category"] != "restorative"] + [y for y in pool if y["category"] == "restorative"]
-        pool = [y for y in pool if y["category"] != "gentle backbend"]
-    take = max(2, int(minutes / 1.5))
-    picks = pool[:take - 1] + [y for y in pool if y["category"] == "restorative" and y not in pool[:take - 1]][:1]
-    return [dict(y, dose=y["dose"]) for y in picks]
+        style = rng.choice(["qigong_a", "qigong_b", "qigong_all", "flow", "combo"])
+        q = c["qigong"]
+        if style == "qigong_a":
+            picks = [q[i] for i in (0, 2, 4, 6)]
+        elif style == "qigong_b":
+            picks = [q[i] for i in (1, 3, 5, 7)]
+        elif style == "qigong_all":
+            picks = list(q)
+        elif style == "combo":   # a few qigong moves and a few yoga poses
+            picks = [q[i] for i in sorted(rng.sample(range(8), 3))] + [rng.choice(by_cat("spine")), rng.choice(by_cat("hips"))]
+        else:   # a yoga flow for the hips and spine instead of qigong
+            picks = [rng.choice(by_cat("spine")), rng.choice(by_cat("hips")), rng.choice(by_cat("forward fold")),
+                     rng.choice(by_cat("restorative"))]
+        return with_tool([dict(p) for p in picks] + [dict(rng.choice(breathing))], "vibration")
+    # after strength: one pose from each of spine, folds, hips and rest, different poses on different days
+    picks = []
+    for cats in (("spine",), ("strength",), ("forward fold",), ("hips",), ("restorative",)):
+        pool = [y for y in by_cat(*cats) if y not in picks]
+        if pool:
+            picks.append(rng.choice(pool))
+    return with_tool([dict(p) for p in picks], "vibration")
 
 
-def cooldown_note(kidney=0, pelvic_floor=0, focus="strength"):
+def cooldown_note(kidney=0, pelvic_floor=0, focus="strength", cards_=None):
     if (kidney or 0) > 6 or (pelvic_floor or 0) > 7:
         return "Symptoms were high last time, so this is rest and breathing only."
+    names = [c["name"] for c in (cards_ or [])]
+    extra = " The vibration board or inversion table is included today (low setting, short)." if any(
+        c.get("category") == "recovery tool" for c in (cards_ or [])) else ""
     if focus == "cardio":
-        return "Baduanjin qigong, the eight moves in kidney-safe form, then a minute of belly breathing. About 10 minutes. Skip any move you like."
+        moves = sum(1 for n in names if n.startswith("Baduanjin"))
+        yoga = sum(1 for c in (cards_ or []) if c.get("category") not in ("qigong", "breath", "recovery tool"))
+        if moves and yoga:
+            return f"A mix: {moves} qigong moves and {yoga} yoga poses, then breathing. It changes every day." + extra
+        if moves:
+            which = "all eight moves" if moves == 8 else f"{moves} of the 8 moves"
+            return f"Baduanjin qigong, {which} in kidney-safe form, then breathing. It changes every day." + extra
+        return "A yoga flow for the hips and spine, then a breathing practice. It changes every day." + extra
     if focus in ("recovery", "rest"):
-        return "A recovery day: restful poses and breathing. A guided meditation (Mind & Body tab) fits well too."
-    return "A gentle 8-minute wind-down chosen for your kidney and pelvic floor. Skip it any day you like."
+        return "A recovery day: restful poses and breathing. A guided meditation (Mind & Body tab) fits well too." + extra
+    return "A gentle wind-down chosen for your kidney and pelvic floor. Different poses each day. Skip it any day you like." + extra
