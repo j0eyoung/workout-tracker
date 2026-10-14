@@ -9,6 +9,32 @@ def _median(values):
     return values[len(values) // 2]
 
 
+HOLD_MAX_SECS = 120
+
+
+def suggest_hold(date, sets, phase, rpe, kidney, pf):
+    """Timed holds: seconds held last time (stored in the reps column) and today's target, a few seconds longer."""
+    secs = [s["reps"] for s in sets if s.get("reps")]
+    if not secs:
+        return None
+    typical = _median(secs)
+    out = {"date": date, "last": ", ".join(f"{s} s" for s in secs), "weight": None, "reps": typical, "secs": typical,
+           "sets_delta": 0}
+    hard = (rpe or 0) >= 8 or (kidney or 0) > 3 or (pf or 0) > 6
+    if phase == "Easy week":
+        out["note"] = f"Easy week: hold {typical} s again, one hold fewer."
+        out["sets_delta"] = -1
+    elif hard:
+        out["note"] = f"Hold {typical} s again: your last session was tough."
+    elif typical >= HOLD_MAX_SECS:
+        out["note"] = f"Hold {typical} s. That's plenty: keep the quality high."
+    else:
+        add = 10 if phase == "Build+" else 5
+        target = min(typical + add, HOLD_MAX_SECS)
+        out.update(reps=target, secs=target, note=f"Hold {target} s: {target - typical} s longer than last time.")
+    return out
+
+
 def suggest(date, sets, phase, rpe, kidney, pf):
     """Dict for the exercise card, or None when this exercise has never been logged."""
     reps = [s["reps"] for s in sets if s.get("reps")]

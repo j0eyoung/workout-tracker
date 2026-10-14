@@ -97,6 +97,17 @@ h2:first-child { margin-top: 6px; }
 /* Set rows: tick, set number, lbs, reps, remove */
 .sets { margin-top: 10px; display: grid; gap: 8px; }
 .set { display: grid; grid-template-columns: 44px 30px 1fr 1fr 36px; gap: 8px; align-items: center; }
+.timerbar {
+  position: fixed; left: 12px; right: 12px; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 15;
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
+  background: var(--card); border: 2px solid var(--accent); border-radius: 16px; padding: 10px 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+.timerbar.rest { border-color: var(--ok); }
+.timer-label { font-size: 0.85rem; color: var(--muted); grid-column: 1; }
+.timer-time { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; grid-column: 1; line-height: 1; }
+.timer-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 8px; }
+.timer-actions button { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card-2); cursor: pointer; }
 .holds { display: flex; gap: 10px; flex-wrap: wrap; }
 .holdbtn { min-width: 60px; height: 52px; border-radius: 14px; border: 2px solid var(--muted); background: none; font-weight: 800; font-size: 1.1rem; color: var(--muted); cursor: pointer; }
 .holdbtn.on { background: var(--ok); border-color: var(--ok); color: #06210f; }

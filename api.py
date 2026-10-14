@@ -34,7 +34,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -66,7 +66,8 @@ def library_card(e, why=None):
         "muscles": e["muscles"], "equipment": e["equipment"], "level": e["level"],
         "sources": [library.SOURCE_NAMES.get(s, s) for s in e["sources"]],
         "weighted": e["equipment"] not in WEIGHTLESS_EQUIPMENT and not is_hold(dose, e["name"]),
-        "hold": is_hold(dose, e["name"]),
+        "hold": is_hold(dose, e["name"]), "hold_secs": hold_secs(dose, e["name"]),
+        "rest_secs": rest_secs(dose, is_hold(dose, e["name"])),
     }
 
 
@@ -76,6 +77,24 @@ _HOLD = re.compile(r"\bhold\b|\b\d+(?:-\d+)?\s*(?:s|sec|secs|seconds|min|mins)\b
 def is_hold(dose, name):
     """Timed holds (wall sits, planks, stretches): tracked as check marks, one per hold, not reps."""
     return bool(_HOLD.search(f"{dose or ''} {name}")) or any(w in name.lower() for w in ("plank", "wall sit"))
+
+
+_SECS = re.compile(r"(\d+)(?:\s*-\s*\d+)?\s*(s|sec|secs|seconds|min|mins)\b", re.I)
+_REST = re.compile(r"(\d+)\s*(?:s|sec|seconds)\s*rest", re.I)
+
+
+def hold_secs(dose, name=""):
+    """Starting length of one hold, from the dose text ("3 x 45 s" -> 45, "2 x 20-30 s hold" -> 20, "3 min" -> 180)."""
+    m = _SECS.search(dose or "") or _SECS.search(name or "")
+    if not m:
+        return 30
+    n = int(m.group(1))
+    return n * 60 if m.group(2).lower().startswith("min") else n
+
+
+def rest_secs(dose, hold=False):
+    m = _REST.search(dose or "")
+    return int(m.group(1)) if m else (45 if hold else 60)
 
 
 # Equipment where you don't track pounds: bodyweight, bands (tension, not lbs), rings, sliders, and so on
@@ -90,7 +109,8 @@ def how_to(name, why=None):
         return {"name": name, "dose": guide["dose"], "sets": guide.get("sets", 3), "why": why,
                 "images": guide.get("images", []), "image_note": guide.get("image_note"),
                 "steps": guide["cues"], "tips": [], "safe": True, "warning": None, "weighted": False,
-                "hold": is_hold(guide["dose"], name)}
+                "hold": is_hold(guide["dose"], name), "hold_secs": hold_secs(guide["dose"], name),
+                "rest_secs": rest_secs(guide["dose"], is_hold(guide["dose"], name))}
     entry = get_library()["by_name"].get(name)
     if entry:
         return library_card(entry, why)
@@ -172,8 +192,11 @@ def index():
 def with_progress(card, last, phase):
     """Adds last time's sets and a suggested weight and reps to an exercise card."""
     date, sets = history.last_session(DB_PATH, card["name"])
-    card["progress"] = progression.suggest(date, sets, phase, last.get("rpe"), last.get("kidney_flank_pain"),
-                                           last.get("pelvic_floor_tightness"))
+    suggest = progression.suggest_hold if card.get("hold") else progression.suggest
+    card["progress"] = suggest(date, sets, phase, last.get("rpe"), last.get("kidney_flank_pain"),
+                               last.get("pelvic_floor_tightness"))
+    if card.get("hold") and card["progress"]:
+        card["hold_secs"] = card["progress"]["secs"]      # today's target, a little longer than last time
     return card
 
 

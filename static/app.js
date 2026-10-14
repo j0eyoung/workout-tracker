@@ -187,6 +187,7 @@ function strengthCard(ex) {
     ${ex.progress ? `<div class="progress"><span class="muted">Last time (${esc(formatDate(ex.progress.date))}):</span> ${esc(ex.progress.last)}<br>
       <strong>${esc(ex.progress.note)}</strong></div>` : ""}
     ${hasHowTo(ex) ? toggleButton(key) + (state.open.has(key) ? howTo(ex) : "") : ""}
+    ${ex.hold ? `<p class="small muted" style="margin:6px 0">Tap a number to start a ${esc(ex.hold_secs || 30)} s hold. It ticks itself off and starts your rest.</p>` : ""}
     <div class="sets">${ex.hold ? holdRow(ex.name, sets) : sets.map((s, i) => setRow(ex.name, s, i)).join("")}</div>
     <div class="row-actions"><button type="button" class="btn small" data-act="add-set" data-name="${esc(ex.name)}">${ex.hold ? "+ Add hold" : "+ Add set"}</button>
       ${ex.hold && sets.length > 1 ? `<button type="button" class="btn link small" data-act="remove-set" data-name="${esc(ex.name)}" data-i="${sets.length - 1}">Remove last</button>` : ""}</div>
@@ -452,6 +453,79 @@ async function renderHistory() {
     ${workouts.map(workoutCard).join("")}
     <button type="button" class="btn small" data-act="report">Make an HTML progress report (AI Coach)</button>`;
 }
+
+// --- Timers: hold countdowns and rest between sets -------------------------------------------------
+// One timer at a time, shown in a bar above the tabs. It beeps and buzzes when time is up and keeps the screen on.
+
+const $timer = document.getElementById("timer");
+let timer = null;
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.25, 0.5].forEach((t) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.25, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.2);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + t);
+      o.stop(ctx.currentTime + t + 0.2);
+    });
+  } catch { /* no audio */ }
+  try { navigator.vibrate?.([250, 120, 250]); } catch { /* not supported */ }
+}
+
+async function keepAwake(on) {
+  try {
+    if (on && !timer?.lock && "wakeLock" in navigator) timer.lock = await navigator.wakeLock.request("screen");
+    if (!on && timer?.lock) { timer.lock.release(); timer.lock = null; }
+  } catch { /* not allowed */ }
+}
+
+function startTimer(t) {
+  stopTimer(false);
+  timer = { ...t, start: Date.now(), end: Date.now() + t.secs * 1000 };
+  keepAwake(true);
+  timer.tick = setInterval(drawTimer, 250);
+  drawTimer();
+}
+
+function stopTimer(finished, held) {
+  if (!timer) return;
+  const t = timer;
+  clearInterval(t.tick);
+  keepAwake(false);
+  timer = null;
+  $timer.hidden = true;
+  if (finished) {
+    beep();
+    if (t.onDone) t.onDone(held ?? t.secs);
+  }
+}
+
+function drawTimer() {
+  if (!timer) return;
+  const left = Math.max(0, Math.ceil((timer.end - Date.now()) / 1000));
+  if (left <= 0) return stopTimer(true);
+  const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, "0");
+  $timer.hidden = false;
+  $timer.className = `timerbar ${timer.kind}`;
+  $timer.innerHTML = `<div class="timer-label">${esc(timer.label)}</div><div class="timer-time">${mm}:${ss}</div>
+    <div class="timer-actions">${timer.kind === "hold"
+      ? `<button type="button" data-timer="done">Done now</button><button type="button" data-timer="cancel">Cancel</button>`
+      : `<button type="button" data-timer="plus">+15 s</button><button type="button" data-timer="skip">Skip</button>`}</div>`;
+}
+
+$timer.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-timer]");
+  if (!b || !timer) return;
+  const act = b.dataset.timer;
+  if (act === "plus") { timer.end += 15000; drawTimer(); }
+  else if (act === "skip" || act === "cancel") stopTimer(false);
+  else if (act === "done") stopTimer(true, Math.max(1, Math.round((Date.now() - timer.start) / 1000)));
+});
 
 // --- Week -------------------------------------------------------------------------------------
 
@@ -908,10 +982,29 @@ const actions = {
     scheduleSave();
   },
   done(el) {
-    const s = state.sets[el.dataset.name][Number(el.dataset.i)];
+    const name = el.dataset.name;
+    const i = Number(el.dataset.i);
+    const s = state.sets[name][i];
+    const ex = exerciseFor(name);
+    if (!s.done && ex.hold) {
+      // a hold: run its countdown; it ticks itself off when time is up
+      const secs = Number(ex.hold_secs) || 30;
+      startTimer({
+        kind: "hold", label: `${name}: hold ${i + 1}`, secs,
+        onDone(held) {
+          s.done = true;
+          s.reps = held;
+          rerenderCard(`s:${name}`);
+          scheduleSave();
+          if (state.sets[name].some((x) => !x.done)) startTimer({ kind: "rest", label: "Rest", secs: Number(ex.rest_secs) || 45 });
+        },
+      });
+      return;
+    }
     s.done = !s.done;
-    rerenderCard(`s:${el.dataset.name}`);
+    rerenderCard(`s:${name}`);
     scheduleSave();
+    if (s.done) startTimer({ kind: "rest", label: "Rest", secs: Number(ex.rest_secs) || 60 });
   },
   "add-set"(el) {
     const sets = state.sets[el.dataset.name];

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1 - Hold Timers, Rest Timers, Holds That Grow
+
+### 🌟 Features
+* **Hold timer.** Tap a hold's number (wall sits, planks, stretches) and a countdown starts in a bar above the tabs. When time is up it beeps, buzzes and ticks the hold off on its own. "Done now" stops early and records how long you actually held; "Cancel" stops without ticking.
+* **Rest timer.** Finishing a set or a hold starts a rest countdown (the exercise's rest time, or 60 s for sets and 45 s between holds). "+15 s" adds time, "Skip" ends it.
+* The screen stays on while a timer runs.
+* **Holds get longer over time.** The seconds you hold are saved, and next time the card suggests 5 s more (10 s in Build+ weeks, up to 2 minutes). It holds steady after a tough session or high symptoms, and the Easy week drops one hold.
 ## 0.8.0 - Morning Check-In, Equipment Without Symptom Limits
 
 ### 🌟 Features
