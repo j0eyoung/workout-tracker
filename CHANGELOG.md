@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.6 - Done for Today
+
+### 🌟 Features
+* **Completed means completed.** Once today's workout is saved, the Today tab shows "✅ Today's workout is done" with what you logged (exercises, sets, cardio minutes, effort) and a link to History, instead of the whole workout again. The cool-down (and its guided player) and the second-session option stay available.
+* **No double logging.** The same session can't be saved twice in one day; a finished second session shows as done too.
+
 ## 0.9.5 - Side-by-Side Timers, Opener Timers, Guided Cool-Down
 
 ### 🌟 Features

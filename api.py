@@ -37,7 +37,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.9.5"
+VERSION = "0.9.6"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -341,6 +341,7 @@ def plan():
                    "type": w.get("cardio_type"), "images": CARDIO_IMAGES.get(w.get("cardio_type"), [])},
         "extra_cardio": w.get("extra_cardio"),
         "session2": planedit.session2_names(today),
+        "done": _done_today(today),
         "draft": {"tracker": [_page_row(r) for r in draft.get("tracker", [])], "checks": draft.get("checks", {})},
     }
 
@@ -373,6 +374,8 @@ def complete(c: Completion):
     today = history.local_today()
     w = todays_workout()
     names2 = set(planedit.session2_names(today))
+    if str(c.session) in _done_today(today):
+        raise HTTPException(409, "Already logged today.")
     if c.session == 2:
         w2 = {"session": 2, "strength": [n for n in w["strength"] if n in names2], "extra_cardio": w.get("extra_cardio"),
               "cardio_type": (w.get("extra_cardio") or {}).get("type"), "cardio_minutes": (w.get("extra_cardio") or {}).get("minutes"),
@@ -662,6 +665,21 @@ def save_checkin(c: CheckIn):
 def reset_changes():
     planedit.clear(history.local_today())
     return {"ok": True}
+
+
+def _done_today(today):
+    """Today's logged sessions ("1" and/or "2") with a short summary for the Today page."""
+    done = {}
+    for w in history.get_history(DB_PATH, 10):
+        if w["date"] != today:
+            continue
+        key = "2" if (w.get("workout") or {}).get("session") == 2 else "1"
+        if key in done:
+            continue
+        sets = [s for s in w["sets"] if s.get("done")]
+        done[key] = {"rpe": w.get("rpe"), "sets": len(sets), "exercises": len({s["exercise"] for s in sets}),
+                     "minutes": (w.get("workout") or {}).get("cardio_minutes")}
+    return done
 
 
 def _logged_dates():

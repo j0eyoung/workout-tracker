@@ -59,6 +59,8 @@ h2:first-child { margin-top: 6px; }
 }
 .card h3 { margin: 0; font-size: 1.02rem; }
 .card .sub { color: var(--muted); font-size: 0.88rem; margin-top: 2px; }
+.done-card { border-color: var(--accent); }
+.done-card .row-actions { margin-top: 10px; }
 .why { font-size: 0.82rem; color: var(--accent); margin-top: 4px; }
 
 .btn {

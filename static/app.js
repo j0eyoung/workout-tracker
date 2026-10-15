@@ -301,6 +301,7 @@ function renderToday() {
   }
   const cardio = p.cardio;
   const cardioText = (cardio.text || "").replace(/^\d+ min:\s*/, "");
+  if (p.done?.["1"]) return renderTodayDone(p);
   $view.innerHTML = `
     ${checkinCard(p)}
     ${p.garmin?.level ? `<div class="card season"><strong>${p.garmin.level === "recovery" ? "Garmin says: recovery day" : "Garmin says: go a bit lighter today"}</strong>
@@ -343,8 +344,35 @@ function renderToday() {
     ${secondSessionSection(p)}`;
 }
 
+function doneSummary(d) {
+  const bits = [];
+  if (d.exercises) bits.push(`${d.exercises} exercise${d.exercises === 1 ? "" : "s"}, ${d.sets} set${d.sets === 1 ? "" : "s"}`);
+  if (d.minutes) bits.push(`${d.minutes} min cardio`);
+  if (d.rpe) bits.push(`effort ${d.rpe}/10`);
+  return bits.join(" · ");
+}
+
+// Today's workout is logged: show it as done (no second Complete), keep the cool-down and a second session available
+function renderTodayDone(p) {
+  const d = p.done["1"];
+  $view.innerHTML = `
+    <div class="card done-card"><h3>✅ Today's workout is done</h3>
+      <p class="sub">${esc(doneSummary(d) || "Saved to History.")}</p>
+      <div class="row-actions"><button type="button" class="btn small" data-act="goto" data-v="history">View in History</button></div></div>
+    ${p.snow_sport ? snowCard(p) : ""}
+    ${p.cooldown?.cards?.length ? `<h2>${esc(p.cooldown.title || "Cool-down")} <span class="muted">(optional)</span></h2>
+    <p class="small muted" style="margin-top:0">${esc(p.cooldown.note)}</p>
+    <div class="row-actions" style="margin:0 0 10px"><button type="button" class="btn small" data-act="guided-cooldown" data-v="45">▶ Play guided cool-down</button></div>
+    ${p.cooldown.cards.map(mindCard).join("")}` : ""}
+    ${secondSessionSection(p)}`;
+}
+
 // A second workout on the same day, logged on its own (its own effort rating and its own History entry)
 function secondSessionSection(p) {
+  if (p.done?.["2"]) {
+    return `<h2>Second session</h2><div class="card done-card"><h3>✅ Second session done</h3>
+      <p class="sub">${esc(doneSummary(p.done["2"]) || "Saved to History.")}</p></div>`;
+  }
   const names = p.session2 || [];
   const has = names.length || p.extra_cardio;
   return `<h2>Second session${has ? "" : " <span class=\"muted\">(optional)</span>"}</h2>
@@ -404,10 +432,14 @@ async function completeWorkout(btn, session = 1) {
       store.set(finishKey(), state.finish);
     }
     state.history = null;
-    toast(session === 2 ? "Second session saved to History 💪" : "Workout saved to History 💪 Your next plan is ready.");
+    toast(session === 2 ? "Second session saved to History 💪" : "Workout saved to History 💪 Done for today.");
     await refreshPlan();
     window.scrollTo({ top: 0 });
-  } catch {
+  } catch (err) {
+    if (err.status === 409) {
+      toast("Already logged today.");
+      return refreshPlan();
+    }
     toast("Couldn't save. Check your connection and try again.");
     btn.disabled = false;
     btn.textContent = label;
