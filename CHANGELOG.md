@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.7 - Core Canister Breathing
+
+### 🌟 Features
+* **Core Canister Breathing (Leaky Can) every day.** 40 slow breaths (4 rounds of 10) in the daily non-negotiables, before the TVA Adductor Hack. Breathe in and let the ribs widen and the pelvic floor relax; breathe out and draw the lower belly in with a light pelvic floor lift, with nothing pushing down or bulging. Cued for a tight pelvic floor: no gripping, and the relax matters as much as the lift.
+
 ## 0.9.6 - Done for Today
 
 ### 🌟 Features

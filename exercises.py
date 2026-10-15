@@ -33,6 +33,16 @@ GUIDES = {
             "Breathe out slowly and let the ribs settle. Keep it gentle: never force a stretch on the left side.",
         ],
     },
+    "Core Canister Breathing (Leaky Can)": {
+        "dose": "40 slow breaths (4 rounds of 10)",
+        "cues": [
+            "Lie on your back or sit tall, one hand on your lower ribs and one on your lower belly.",
+            "Your core is a can: diaphragm is the lid, pelvic floor is the bottom, deep abs and back are the walls.",
+            "Breathe in through your nose: ribs widen, belly softens and the pelvic floor relaxes and drops.",
+            "Breathe out slowly through pursed lips: lower belly draws gently in and the pelvic floor lifts lightly (about 20%), ribs settle down.",
+            "No leaks: nothing pushes down or bulges, no breath holding. Never grip or clench; the relax on the in-breath matters as much as the lift.",
+        ],
+    },
     "TVA Adductor Hack": {
         "dose": "10 slow reps",
         "cues": [

@@ -112,7 +112,8 @@ class WorkoutEngine:
         today = today or datetime.date.today()
 
         workout_plan = {
-            "warmup": ["Gut-Motility Primer", "360-Degree Rib Breathing", "TVA Adductor Hack"],
+            "warmup": ["Gut-Motility Primer", "360-Degree Rib Breathing", "Core Canister Breathing (Leaky Can)",
+                       "TVA Adductor Hack"],
             "strength": [],
             "cardio": ""
         }
