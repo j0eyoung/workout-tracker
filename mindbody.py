@@ -470,6 +470,31 @@ def qigong_session(seconds_per_move=45):
     return segments, cards_
 
 
+def guided_segments(cards_, seconds=45):
+    """Any list of cool-down cards as a spoken session: each one read out, then quiet time to do it. One-sided poses
+    get a left side and a right side. Returns (segments for tts.start_session, picture steps for the player)."""
+    segments = [{"text": "Time to cool down. Find a quiet spot, let your breathing slow, and keep your belly soft.", "hold": 5}]
+    steps = [{"name": "Getting ready", "image": None}]
+    for c in cards_:
+        name = c["name"]
+        spoken = name.split(":", 1)[1].strip() if name.startswith("Baduanjin") else name.split(" (")[0]
+        body = " ".join(s for s in c.get("steps", []) if s != BREATH)
+        tip = (c.get("tips") or [""])[0]
+        hold = 60 if c.get("category") == "breath" else 90 if c.get("category") == "recovery tool" else seconds
+        pic = {"name": name, "image": (c.get("images") or [None])[0], "note": c.get("image_note") or c.get("warning")}
+        if "each side" in (c.get("dose") or ""):
+            segments.append({"text": f"{spoken}. {body} {tip} Start with your left side.", "hold": hold})
+            steps.append(dict(pic, name=f"{name}: left side"))
+            segments.append({"text": "Now switch to your right side.", "hold": hold})
+            steps.append(dict(pic, name=f"{name}: right side"))
+        else:
+            segments.append({"text": f"{spoken}. {body} {tip} Begin now.", "hold": hold})
+            steps.append(pic)
+    segments.append({"text": "That's your cool-down. Take one more slow breath, and well done today.", "hold": 3})
+    steps.append({"name": "Finished", "image": None})
+    return segments, steps
+
+
 def _qigong_card(name, steps, tip, n=0):
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "qigong", f"{n}.jpg")
     images = [f"static/qigong/{n}.jpg"] if n and os.path.exists(path) else []

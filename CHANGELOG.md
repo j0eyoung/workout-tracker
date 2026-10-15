@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.5 - Side-by-Side Timers, Opener Timers, Guided Cool-Down
+
+### 🌟 Features
+* **One side at a time.** Holds done per side (side planks, one-leg holds, one-sided stretches) run a **left** timer, give you 5 seconds to switch, then run a **right** timer before ticking the hold off. The timer bar says which side you are on.
+* **Timers on the daily openers.** Timed warm-ups (the 2-minute Gut-Motility Primer and rib breathing, the vibration board primer) have a "▶ Start timer" button that checks the item off when time is up. Rep-based openers stay a simple check box.
+* **"▶ Play guided cool-down" on the Today tab.** It plays exactly today's cool-down (qigong moves, yoga poses, vibration board or inversion table, breathing) in your chosen natural voice, with time for each one, both sides for one-sided poses, and the picture following along. The first time it prepares the audio (a few minutes); repeat plays start straight away.
 ## 0.9.4 - Guided Qigong Session
 
 ### 🌟 Features

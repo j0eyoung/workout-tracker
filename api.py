@@ -37,7 +37,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.9.4"
+VERSION = "0.9.5"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -70,8 +70,23 @@ def library_card(e, why=None):
         "sources": [library.SOURCE_NAMES.get(s, s) for s in e["sources"]],
         "weighted": e["equipment"] not in WEIGHTLESS_EQUIPMENT and not is_hold(dose, e["name"]),
         "hold": is_hold(dose, e["name"]), "hold_secs": hold_secs(dose, e["name"]),
-        "rest_secs": rest_secs(dose, is_hold(dose, e["name"])),
+        "rest_secs": rest_secs(dose, is_hold(dose, e["name"])), "each_side": each_side(dose, e["name"], e.get("single_arm")),
     }
+
+
+_EACH = re.compile(r"each (side|leg|arm)|per side", re.I)
+_ONE_SIDED = re.compile(r"single|one[- ]?(arm|leg)|side|lunge|split|pigeon|figure[- ]?four|lizard|quad|hamstring|calf|"
+                        r"hip flexor|piriformis|it band|clamshell|unilateral|alternating", re.I)
+
+
+_CLEARLY_ONE_SIDED = re.compile(r"side plank|single[- ]leg|one[- ]leg|single[- ]arm|one[- ]arm|pigeon|figure[- ]?four", re.I)
+
+
+def each_side(dose, name, single=False):
+    """Done one side at a time (left, then right)? '...each side if one-sided' only counts for one-sided moves."""
+    if not _EACH.search(dose or ""):
+        return bool(_CLEARLY_ONE_SIDED.search(name or ""))
+    return "if one-sided" not in (dose or "") or bool(single) or bool(_ONE_SIDED.search(name or ""))
 
 
 _HOLD = re.compile(r"\bhold\b|\b\d+(?:-\d+)?\s*(?:s|sec|secs|seconds|min|mins)\b", re.I)
@@ -113,7 +128,8 @@ def how_to(name, why=None):
                 "images": guide.get("images", []), "image_note": guide.get("image_note"),
                 "steps": guide["cues"], "tips": [], "safe": True, "warning": None, "weighted": False,
                 "hold": is_hold(guide["dose"], name), "hold_secs": hold_secs(guide["dose"], name),
-                "rest_secs": rest_secs(guide["dose"], is_hold(guide["dose"], name))}
+                "rest_secs": rest_secs(guide["dose"], is_hold(guide["dose"], name)),
+                "each_side": each_side(guide["dose"], name)}
     entry = get_library()["by_name"].get(name)
     if entry:
         return library_card(entry, why)
@@ -273,6 +289,16 @@ def with_progress(card, last, phase):
     return card
 
 
+def _cooldown_for(w, last, today):
+    """Today's cool-down cards and the day type they follow (used by the plan and the guided cool-down)."""
+    kidney, pf = last.get("kidney_flank_pain"), last.get("pelvic_floor_tightness")
+    day_focus = planner.day_plan(datetime.date.fromisoformat(today), selected_sports())["focus"]
+    if w.get("cardio_type") == "recovery":
+        day_focus = "recovery"                     # a high kidney score turns any day into recovery
+    cards = mindbody.cooldown(kidney, pf, focus=day_focus, day=today, equipment=library.selected_equipment())
+    return day_focus, cards
+
+
 @app.get("/api/plan")
 def plan():
     today = history.local_today()
@@ -282,15 +308,15 @@ def plan():
     last = current_log(today)
     kidney, pf = last.get("kidney_flank_pain"), last.get("pelvic_floor_tightness")
     phase = planner.phase(datetime.date.fromisoformat(today))
-    day_focus = planner.day_plan(datetime.date.fromisoformat(today), selected_sports())["focus"]
-    if w.get("cardio_type") == "recovery":
-        day_focus = "recovery"                     # a high kidney score turns any day into recovery
     equipment = library.selected_equipment()
-    cool_cards = mindbody.cooldown(kidney, pf, focus=day_focus, day=today, equipment=equipment)
+    day_focus, cool_cards = _cooldown_for(w, last, today)
     warmup_cards = [how_to(n) for n in w["warmup"]]
     # Vibration board primer on strength days (fine at any symptom level, short and lowest setting)
     if day_focus == "strength":
         warmup_cards += mindbody.tool_cards(equipment, "warmup")
+    for c in warmup_cards:   # timed openers (2 min breathing, vibration board) get a timer on their card
+        if "hold" not in c:
+            c["hold"], c["hold_secs"] = is_hold(c.get("dose"), c["name"]), hold_secs(c.get("dose"), c["name"])
     season = _season(datetime.date.fromisoformat(today))
     if season and season["phase"] in ("Taper", "Opening day"):
         phase = "Easy week"          # opening week: hold loads, one set fewer
@@ -928,6 +954,22 @@ def qigong_session(q: QigongSession):
     steps = [{"name": "Getting ready", "image": None}] + \
         [{"name": c["name"], "image": (c["images"] or [None])[0], "note": c.get("image_note")} for c in cards] + \
         [{"name": "Breathing to finish", "image": None}]
+    return {**tts.public(job), "steps": steps}
+
+
+class GuidedRequest(BaseModel):
+    voice: str = tts.DEFAULT_VOICE
+    seconds: int = 45
+
+
+@app.post("/api/cooldown/guided")
+def guided_cooldown(g: GuidedRequest):
+    """Today's cool-down, exactly as shown on the Today tab, read aloud with time for each pose or move."""
+    today = history.local_today()
+    w = todays_workout()
+    _, cards = _cooldown_for(w, current_log(today), today)
+    segments, steps = mindbody.guided_segments(cards, max(20, min(g.seconds, 120)))
+    job = tts.start_session(g.voice, segments)
     return {**tts.public(job), "steps": steps}
 
 

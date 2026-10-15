@@ -224,8 +224,14 @@ function warmupCard(ex) {
       <span class="box">✓</span>
       <span><span class="name">${esc(ex.name)}</span><span class="sub" style="display:block">${esc(ex.dose || "")}</span></span>
     </button>
+    ${ex.hold && !on ? `<button type="button" class="btn small" data-act="warmup-timer" data-name="${esc(ex.name)}">▶ Start ${fmtSecs(ex.hold_secs || 60)} timer</button>` : ""}
     ${hasHowTo(ex) ? toggleButton(key) + (state.open.has(key) ? howTo(ex) : "") : ""}
   </div>`;
+}
+
+function fmtSecs(s) {
+  s = Number(s) || 0;
+  return s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : `${s} s`;
 }
 
 function slider(id, label, help) {
@@ -321,6 +327,7 @@ function renderToday() {
 
     ${p.cooldown?.cards?.length ? `<h2>4. ${esc(p.cooldown.title || "Cool-down")} <span class="muted">(optional)</span></h2>
     <p class="small muted" style="margin-top:0">${esc(p.cooldown.note)}</p>
+    <div class="row-actions" style="margin:0 0 10px"><button type="button" class="btn small" data-act="guided-cooldown" data-v="45">▶ Play guided cool-down</button></div>
     ${p.cooldown.cards.map(mindCard).join("")}` : ""}
 
     <h2>${p.cooldown?.cards?.length ? "5" : "4"}. Finish</h2>
@@ -567,11 +574,19 @@ const $qg = document.getElementById("qg");
 const qg = { key: null, steps: [], timeline: [], poll: null, current: -1, lock: null };
 
 async function startQigong(seconds) {
+  return startGuided("api/qigong/session", seconds, "Guided Baduanjin");
+}
+
+// Any guided session (the full Baduanjin, or today's cool-down): one spoken audio file, the picture follows along
+async function startGuided(url, seconds, title) {
+  if (!state.voices) {
+    try { state.voices = await api("api/voices"); state.voice = state.voices.selected; } catch { /* use the default voice */ }
+  }
   clearTimeout(qg.poll);
-  showQg(`<div class="qg-wait"><h3>Guided Baduanjin</h3><p id="qg-status" class="sub">Getting the voice ready…</p>
+  showQg(`<div class="qg-wait"><h3>${esc(title)}</h3><p id="qg-status" class="sub">Getting the voice ready…</p>
     <button type="button" class="btn small" data-qg="close">Cancel</button></div>`);
   try {
-    const r = await api("api/qigong/session", { method: "POST", body: JSON.stringify({ voice: state.voice || "lessac", seconds }) });
+    const r = await api(url, { method: "POST", body: JSON.stringify({ voice: state.voice || "lessac", seconds }) });
     qg.key = r.key;
     qg.steps = r.steps;
     pollQigong(r);
@@ -614,7 +629,7 @@ function drawQigong(t) {
   qg.current = i;
   const step = qg.steps[i] || {};
   const moves = qg.steps.length - 2;
-  const label = i === 0 ? "Getting ready" : i > moves ? "Finish" : `Move ${i} of ${moves}`;
+  const label = i === 0 ? "Getting ready" : i > moves ? "Finish" : `Step ${i} of ${moves}`;
   const stage = document.getElementById("qg-stage");
   if (stage) {
     stage.innerHTML = `<div class="small muted">${esc(label)}</div><h3 style="margin:4px 0 10px">${esc(step.name || "")}</h3>
@@ -1155,6 +1170,19 @@ const actions = {
     rerenderCard(`w:${name}`);
     scheduleSave();
   },
+  "warmup-timer"(el) {
+    const name = el.dataset.name;
+    const ex = state.plan.warmup.find((e) => e.name === name);
+    if (!ex) return;
+    startTimer({
+      kind: "hold", label: name, secs: Number(ex.hold_secs) || 60,
+      onDone() {
+        state.checks[name] = true;
+        rerenderCard(`w:${name}`);
+        scheduleSave();
+      },
+    });
+  },
   done(el) {
     const name = el.dataset.name;
     const i = Number(el.dataset.i);
@@ -1163,16 +1191,29 @@ const actions = {
     if (!s.done && ex.hold) {
       // a hold: run its countdown; it ticks itself off when time is up
       const secs = Number(ex.hold_secs) || 30;
-      startTimer({
-        kind: "hold", label: `${name}: hold ${i + 1}`, secs,
-        onDone(held) {
-          s.done = true;
-          s.reps = held;
-          rerenderCard(`s:${name}`);
-          scheduleSave();
-          if (state.sets[name].some((x) => !x.done)) startTimer({ kind: "rest", label: "Rest", secs: Number(ex.rest_secs) || 45 });
-        },
-      });
+      const finish = (held) => {
+        s.done = true;
+        s.reps = held;
+        rerenderCard(`s:${name}`);
+        scheduleSave();
+        if (state.sets[name].some((x) => !x.done)) startTimer({ kind: "rest", label: "Rest", secs: Number(ex.rest_secs) || 45 });
+      };
+      if (ex.each_side) {
+        // one side at a time: left, a few seconds to switch, then right
+        startTimer({
+          kind: "hold", label: `${name}: hold ${i + 1}, LEFT side`, secs,
+          onDone(left) {
+            startTimer({
+              kind: "rest", label: "Switch to your right side", secs: 5,
+              onDone() {
+                startTimer({ kind: "hold", label: `${name}: hold ${i + 1}, RIGHT side`, secs, onDone: (right) => finish(Math.min(left, right)) });
+              },
+            });
+          },
+        });
+      } else {
+        startTimer({ kind: "hold", label: `${name}: hold ${i + 1}`, secs, onDone: finish });
+      }
       return;
     }
     s.done = !s.done;
@@ -1226,6 +1267,9 @@ const actions = {
     await refreshPlan();
     render();
     toast("Back to the usual week");
+  },
+  "guided-cooldown"(el) {
+    startGuided("api/cooldown/guided", Number(el.dataset.v) || 45, state.plan?.cooldown?.title || "Cool-down");
   },
   "qigong-start"(el) {
     if (!state.voice && state.voices?.selected) state.voice = state.voices.selected;
