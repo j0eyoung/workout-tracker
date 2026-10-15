@@ -36,11 +36,11 @@ GUIDES = {
     "Core Canister Breathing (Leaky Can)": {
         "dose": "40 slow breaths (4 rounds of 10)",
         "cues": [
-            "Lie on your back or sit tall, one hand on your lower ribs and one on your lower belly.",
-            "Your core is a can: diaphragm is the lid, pelvic floor is the bottom, deep abs and back are the walls.",
-            "Breathe in through your nose: ribs widen, belly softens and the pelvic floor relaxes and drops.",
-            "Breathe out slowly through pursed lips: lower belly draws gently in and the pelvic floor lifts lightly (about 20%), ribs settle down.",
-            "No leaks: nothing pushes down or bulges, no breath holding. Never grip or clench; the relax on the in-breath matters as much as the lift.",
+            "Lie on your back, knees bent, fingers just inside your hip bones (on the TA).",
+            "Your core is a can: diaphragm is the lid, pelvic floor is the bottom, the TA (deep abs) is the walls.",
+            "Breathe in through your nose: ribs widen, belly softens and the pelvic floor relaxes.",
+            "Breathe out slowly through pursed lips and draw your lower belly in: you should feel the TA tighten and flatten under your fingers. That tension is the check that you're doing it right.",
+            "No leaks: if your fingers feel a bulge or push-out, or you hold your breath, ease off and start the next breath. Let the pelvic floor follow lightly; never grip or clench.",
         ],
     },
     "TVA Adductor Hack": {

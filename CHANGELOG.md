@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.8 - Leaky Can Cues
+
+### 🔧 Improvements
+* **Core Canister Breathing is cued around the TA.** Fingers just inside the hip bones; on each slow out-breath you should feel the TA tighten and flatten under them. A bulge or breath hold means ease off and reset on the next breath.
+
 ## 0.9.7 - Core Canister Breathing
 
 ### 🌟 Features
