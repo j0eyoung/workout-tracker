@@ -21,6 +21,7 @@ import coach
 import garmin_sync
 import ha
 import history
+import insights
 import library
 import media
 import meditation
@@ -37,7 +38,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.9.8"
+VERSION = "0.10.0"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -120,16 +121,30 @@ WEIGHTLESS_EQUIPMENT = {"bodyweight", "bands", "stability ball", "foam roller", 
                         "sliders", "rings", "cardio machine"}
 
 
+PT_SECTIONS = ("warmup", "strength")
+
+
+def pt_exercises():
+    """Exercises Joe's PT gave him, added in Settings: [{name, dose, cues, days (0=Mon; empty = every day), section, sets}]."""
+    return library.load_settings().get("pt_exercises") or []
+
+
+def pt_for_day(d):
+    return [p for p in pt_exercises() if not p.get("days") or d.weekday() in p["days"]]
+
+
 def how_to(name, why=None):
     """Dose, pictures and steps for an exercise in today's plan."""
-    guide = GUIDES.get(name)
+    pt = next((p for p in pt_exercises() if p["name"] == name), None)
+    guide = {"dose": pt["dose"] or "As your PT showed you", "cues": pt.get("cues") or [], "sets": pt.get("sets") or 3} if pt \
+        else GUIDES.get(name)
     if guide:
         return {"name": name, "dose": guide["dose"], "sets": guide.get("sets", 3), "why": why,
                 "images": guide.get("images", []), "image_note": guide.get("image_note"),
                 "steps": guide["cues"], "tips": [], "safe": True, "warning": None, "weighted": False,
                 "hold": is_hold(guide["dose"], name), "hold_secs": hold_secs(guide["dose"], name),
                 "rest_secs": rest_secs(guide["dose"], is_hold(guide["dose"], name)),
-                "each_side": each_side(guide["dose"], name)}
+                "each_side": each_side(guide["dose"], name), "pt": bool(pt)}
     entry = get_library()["by_name"].get(name)
     if entry:
         return library_card(entry, why)
@@ -234,6 +249,13 @@ def _generate(date_iso):
             w = planedit.apply(w, [{"op": "cardio", "type": w["cardio_type"],
                                     "minutes": max(10, int(w["cardio_minutes"] * 0.75 / 5) * 5),
                                     "why": "lighter day from your Garmin data"}])
+    # Your PT's exercises for this weekday: daily ones join the non-negotiables, the rest go with strength
+    for p in pt_for_day(d):
+        if p.get("section") == "strength":
+            if p["name"] not in w["strength"]:
+                w["strength"] = w["strength"] + [p["name"]]
+        elif p["name"] not in w["warmup"]:
+            w["warmup"] = w["warmup"] + [p["name"]]
     if resting:   # the fixed exercises (wall sits and so on) sit out too
         w["strength"] = [n for n in w["strength"] if n not in resting]
         w["accessories"] = [a for a in w.get("accessories", []) if a["name"] not in resting]
@@ -284,6 +306,8 @@ def with_progress(card, last, phase):
     suggest = progression.suggest_hold if card.get("hold") else progression.suggest
     card["progress"] = suggest(date, sets, phase, last.get("rpe"), last.get("kidney_flank_pain"),
                                last.get("pelvic_floor_tightness"))
+    if card["progress"]:
+        card["progress"]["sets"] = sets                   # last time's sets, for "Same as last time"
     if card.get("hold") and card["progress"]:
         card["hold_secs"] = card["progress"]["secs"]      # today's target, a little longer than last time
     return card
@@ -326,6 +350,8 @@ def plan():
     return {
         "garmin": gsig,
         "season": season,
+        # a ski readiness check every two weeks until opening day
+        "ski_due": bool(season and season.get("days", 0) > 0 and insights.ski_status(DB_PATH, datetime.date.fromisoformat(today))["due"]),
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
         "checkin": history.get_checkin(DB_PATH, today),
@@ -366,7 +392,17 @@ class Completion(BaseModel):
     kidney: int
     notes: str = ""
     tracker: list[dict] = []
+    checks: dict[str, bool] = {}   # daily non-negotiables ticked today
     session: int = 1          # 2 = the second session of the day, logged on its own
+
+
+def _records(log_id, names):
+    """Personal records set by a just-saved workout, kept in its History entry."""
+    holds = {n for n in names if how_to(n).get("hold")}
+    prs = insights.personal_records(DB_PATH, log_id, holds)
+    if prs:
+        history.update_workout(DB_PATH, log_id, prs=prs)
+    return prs
 
 
 @app.post("/api/complete")
@@ -384,20 +420,25 @@ def complete(c: Completion):
         rows = [r for r in c.tracker if _page_row(r).get("exercise") in names2]
         log_id = history.complete_workout(DB_PATH, c.rpe, c.pelvic_floor, c.kidney, c.notes, w2,
                                           [_history_row(_page_row(r)) for r in rows])
+        prs = _records(log_id, {_page_row(r).get("exercise") for r in rows})
         _ha_refresh_soon()
-        return {"ok": True, "log_id": log_id}
+        return {"ok": True, "log_id": log_id, "prs": prs}
     # First session: log everything except the second session, and keep the second session's sets in the draft
     first = dict(w, strength=[n for n in w["strength"] if n not in names2])
     first.pop("extra_cardio", None)
     first["accessories"] = [a for a in first.get("accessories", []) if a["name"] not in names2]
+    checks = c.checks or (history.load_draft(DB_PATH, today) or {}).get("checks") or {}
+    first["warmup_done"] = [n for n in w.get("warmup", []) if checks.get(n)]
+    first["day_type"] = insights.day_type(first, today, selected_sports())
     mine = [r for r in c.tracker if _page_row(r).get("exercise") not in names2]
     kept = [r for r in c.tracker if _page_row(r).get("exercise") in names2]
     log_id = history.complete_workout(DB_PATH, c.rpe, c.pelvic_floor, c.kidney, c.notes, first,
                                       [_history_row(_page_row(r)) for r in mine])
     if kept:
         history.save_draft(DB_PATH, kept, {}, today)
+    prs = _records(log_id, {_page_row(r).get("exercise") for r in mine})
     _ha_refresh_soon()
-    return {"ok": True, "log_id": log_id}
+    return {"ok": True, "log_id": log_id, "prs": prs}
 
 
 @app.get("/api/history")
@@ -408,6 +449,52 @@ def workout_history(limit: int = 60):
 @app.get("/api/progress")
 def progress(exercise: str):
     return {"exercise": exercise, "days": history.exercise_progress(DB_PATH, exercise)}
+
+
+@app.get("/api/trends")
+def symptom_trends(days: int = 30):
+    """Kidney and pelvic floor scores by day with workout effort, and the patterns in them."""
+    return insights.trends(DB_PATH, max(7, min(days, 120)), datetime.date.fromisoformat(history.local_today()),
+                           selected_sports())
+
+
+@app.get("/api/report/pt")
+def pt_visit_report(days: int = 30):
+    """Everything to show the PT at a visit, for the last 14 to 90 days."""
+    today = datetime.date.fromisoformat(history.local_today())
+    warmups = engine_mod.DAILY_WARMUP +[p["name"] for p in pt_exercises() if p.get("section") != "strength"]
+    return insights.pt_report(DB_PATH, max(7, min(days, 90)), today, selected_sports(), list(dict.fromkeys(warmups)),
+                              lambda n: bool(how_to(n).get("hold")))
+
+
+@app.get("/api/skitests")
+def ski_tests():
+    return insights.ski_status(DB_PATH, datetime.date.fromisoformat(history.local_today()))
+
+
+class SkiResults(BaseModel):
+    values: dict[str, float | None]
+
+
+@app.post("/api/skitests")
+def save_ski_tests(r: SkiResults):
+    n = insights.save_ski_results(DB_PATH, r.values, history.local_today())
+    if not n:
+        raise HTTPException(400, "Enter at least one result.")
+    return ski_tests()
+
+
+@app.get("/api/install")
+def install_info():
+    """The add-on's own address on the home network, for adding it to the phone's home screen."""
+    return ha.direct_address()
+
+
+@app.get("/sw.js")
+def service_worker():
+    # Served from the root so it can cover the whole app when it's opened at its own address
+    return FileResponse(os.path.join(HERE, "static", "sw.js"), media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/library")
@@ -678,7 +765,8 @@ def _done_today(today):
             continue
         sets = [s for s in w["sets"] if s.get("done")]
         done[key] = {"rpe": w.get("rpe"), "sets": len(sets), "exercises": len({s["exercise"] for s in sets}),
-                     "minutes": (w.get("workout") or {}).get("cardio_minutes")}
+                     "minutes": (w.get("workout") or {}).get("cardio_minutes"),
+                     "prs": (w.get("workout") or {}).get("prs", [])}
     return done
 
 
@@ -1024,7 +1112,31 @@ def get_settings():
             "paused": [{"name": n, "since": p["since"], "until": p["until"]} for n, p in sorted(paused().items())],
             "machines": readiness.status() if "triathlon" not in selected_sports() else None,
             "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES),
-            "garmin_adjust": bool(library.load_settings().get("garmin_adjust", False))}
+            "garmin_adjust": bool(library.load_settings().get("garmin_adjust", False)),
+            "pt_exercises": pt_exercises()}
+
+
+def _clean_pt(items):
+    """Checks the PT exercise list from Settings: unique names, short text, real weekdays."""
+    out, seen = [], set()
+    for p in items[:20]:
+        name = str(p.get("name") or "").strip()[:80]
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        cues = [str(c).strip()[:300] for c in (p.get("cues") or []) if str(c).strip()][:12]
+        days = sorted({int(x) for x in (p.get("days") or []) if str(x).isdigit() and 0 <= int(x) <= 6})
+        dose = str(p.get("dose") or "").strip()[:80]
+        m = re.match(r"\s*(\d+)\s*[x×]", dose)     # "2 x 12 each side": the dose says how many sets
+        try:
+            sets = int(m.group(1)) if m else int(p.get("sets") or 3)
+        except (TypeError, ValueError):
+            sets = 3
+        out.append({"name": name, "dose": dose, "cues": cues,
+                    "days": [] if len(days) == 7 else days,
+                    "section": p.get("section") if p.get("section") in PT_SECTIONS else "warmup",
+                    "sets": max(1, min(sets, 10))})
+    return out
 
 
 class Settings(BaseModel):
@@ -1035,11 +1147,14 @@ class Settings(BaseModel):
     voice: str | None = None
     sports: list[str] | None = None
     season_start: str | None = None
+    pt_exercises: list[dict] | None = None
 
 
 @app.put("/api/settings")
 def put_settings(s: Settings):
     patch = {}
+    if s.pt_exercises is not None:
+        patch["pt_exercises"] = _clean_pt(s.pt_exercises)
     if s.equipment is not None:
         # "bodyweight" is always available; unknown names are dropped
         patch["equipment"] = sorted({e for e in s.equipment if e in library.EQUIPMENT_OPTIONS} | {"bodyweight"})

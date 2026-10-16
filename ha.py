@@ -58,6 +58,29 @@ def panel_url():
     return _panel["url"] or None
 
 
+def direct_address():
+    """This add-on's own address on the home network (host IP plus the published port), for the phone's home screen.
+    {"url", "port", "host"}; url is None when the port isn't published in the add-on's Network settings."""
+    port, host = None, None
+    try:
+        net = (_call("GET", f"{SUPERVISOR}/addons/self/info") or {}).get("data", {}).get("network") or {}
+        port = net.get("8501/tcp")
+    except Exception:
+        pass
+    try:
+        for iface in (_call("GET", f"{SUPERVISOR}/network/info") or {}).get("data", {}).get("interfaces", []):
+            addrs = (iface.get("ipv4") or {}).get("address") or []
+            if iface.get("primary") and addrs:
+                host = addrs[0].split("/")[0]
+                break
+    except Exception:
+        pass
+    if not available():   # running outside Home Assistant (local testing)
+        port = port or 8501
+    return {"url": f"http://{host or 'homeassistant.local'}:{port}/" if port else None, "port": port,
+            "host": host, "fallback": f"http://homeassistant.local:{port}/" if port and host else None}
+
+
 def notify(service, title, message):
     data = {}
     url = panel_url()

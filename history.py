@@ -32,6 +32,12 @@ SCHEMA = [
         pelvic_floor INTEGER,    -- pelvic floor tightness, 1-10
         updated_at TEXT
     )""",
+    """CREATE TABLE IF NOT EXISTS ski_tests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,               -- local date of the test
+        test TEXT,               -- insights.SKI_TESTS id
+        value REAL               -- seconds or count
+    )""",
 ]
 
 
@@ -151,6 +157,21 @@ def complete_workout(db_path, rpe, pelvic_floor, kidney, notes, workout, tracker
     conn.commit()
     conn.close()
     return log_id
+
+
+def update_workout(db_path, log_id, **fields):
+    """Adds fields to a saved workout's JSON (e.g. the personal records it set)."""
+    conn = sqlite3.connect(db_path)
+    row = conn.execute("SELECT executed_workout FROM daily_logs WHERE id = ?", (log_id,)).fetchone()
+    if row:
+        try:
+            data = json.loads(row[0] or "{}")
+        except ValueError:
+            data = {}
+        data.update(fields)
+        conn.execute("UPDATE daily_logs SET executed_workout = ? WHERE id = ?", (json.dumps(data), log_id))
+        conn.commit()
+    conn.close()
 
 
 def get_history(db_path, limit=60):

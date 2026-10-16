@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.10.0 - PT Exercises, PT Report, Trends, Ski Checks, Records, Install
+
+### 🌟 Features
+* **Your PT's exercises (Settings › From your PT).** Add what your physio gives you: name, dose, how-to steps, which days, and whether it's a daily tick-box or goes with strength (sets come from a dose like "2 x 12"). It shows up on Today with a PT tag. Put seconds in the dose ("3 x 30 s hold") and it gets a timer.
+* **PT report (More › PT report).** One page for appointments: workouts done vs planned, check-ins, average kidney and pelvic floor scores with the trend chart, how often each daily non-negotiable got done, every exercise's first vs latest (weight × reps, reps or hold time), personal records, anything marked "Bothered me", and your notes. Pick 14 to 90 days; "Print or save PDF" gives a clean printout.
+* **Symptom trends (History › How you've felt).** Kidney and pelvic floor scores by day with workout effort underneath, and plain-language patterns: how you feel the morning after hard vs easier days, which kind of day (Legs, Core, Cardio…) is followed by the highest scores, and which way the scores are heading. Also as a table.
+* **Ski readiness checks.** Every two weeks until opening day: wall sit, single-leg balance (eyes closed, each leg), skater steps in 30 s and side plank (each side). Timers count up and fill in your time when you tap Done now. Results show first vs latest on the Week tab; Today reminds you when one is due.
+* **Faster set logging.** "↺ Same as last time" fills your sets with exactly what you did last time, and changing a weight or reps on one set updates the sets after it that matched. (The rest timer already starts when you tick a set.)
+* **Personal-record trophies.** Saving a workout that beats your best (heaviest weight, most reps at a weight, most reps, longest hold) pops a 🏆 celebration, and the records show on the done card and in History.
+* **Install as an app (Settings › Install as an app).** Open the add-on's own address on your phone (on home Wi-Fi) and add it to the home screen: it opens full screen with its own icon, straight to Today.
+
+### 🔧 Improvements
+* Ticks on the daily non-negotiables and the day type are now saved with each workout (for the PT report and trends).
+* The rest timer stops when you save the workout.
+
 ## 0.9.8 - Leaky Can Cues
 
 ### 🔧 Improvements

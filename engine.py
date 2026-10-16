@@ -90,6 +90,10 @@ def pick_accessories(library, equipment, today, recovery, exclude, goals=("snowb
     return picks
 
 
+DAILY_WARMUP = ["Gut-Motility Primer", "360-Degree Rib Breathing", "Core Canister Breathing (Leaky Can)",
+                "TVA Adductor Hack"]
+
+
 class WorkoutEngine:
     def __init__(self, db_path="workout_tracker.db"):
         self.db_path = db_path
@@ -112,8 +116,7 @@ class WorkoutEngine:
         today = today or datetime.date.today()
 
         workout_plan = {
-            "warmup": ["Gut-Motility Primer", "360-Degree Rib Breathing", "Core Canister Breathing (Leaky Can)",
-                       "TVA Adductor Hack"],
+            "warmup": list(DAILY_WARMUP),
             "strength": [],
             "cardio": ""
         }

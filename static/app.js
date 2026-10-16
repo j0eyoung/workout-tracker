@@ -59,6 +59,7 @@ const state = {
   mind: null, mindFilter: "all", mindQ: "",
   week: null, weekOffset: 0, coachDraft: "", secondOpen: false, ck: null, ckEdit: false, snowOpen: false, snow: null,
   garmin: null, garminMsg: "", ha: null,
+  trends: null, trendDays: 30, report: null, reportDays: 30, ski: null, skiOpen: false, skiVals: {}, ptForm: null, install: null,
   voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
   lib: { q: "", focus: "", muscle: "", equipment: "", pictures: true, filtered: false, data: null, results: [], offset: 0 },
@@ -180,8 +181,9 @@ function strengthCard(ex) {
   const sets = state.sets[ex.name] || [];
   const done = sets.filter((s) => s.done).length;
   const key = `s:${ex.name}`;
+  const sameLast = ex.progress?.sets?.length && !ex.hold && sets.some((s) => !s.done);
   return `<div class="card" data-card="${esc(key)}">
-    <h3>${esc(ex.name)}</h3>
+    <h3>${esc(ex.name)}${ex.pt ? ` <span class="badge">PT</span>` : ""}</h3>
     <div class="sub">${esc(ex.dose || "Your own exercise")}${sets.length ? ` · ${done}/${plural(sets.length, "set")} done` : ""}</div>
     ${ex.why ? `<div class="why">${esc(ex.why)}</div>` : ""}
     ${ex.bothered ? `<div class="warning" style="margin-top:6px">${esc(ex.bothered)}</div>` : ""}
@@ -190,7 +192,8 @@ function strengthCard(ex) {
     ${hasHowTo(ex) ? toggleButton(key) + (state.open.has(key) ? howTo(ex) : "") : ""}
     ${ex.hold ? `<p class="small muted" style="margin:6px 0">Tap a number to start a ${esc(ex.hold_secs || 30)} s hold. It ticks itself off and starts your rest.</p>` : ""}
     <div class="sets">${ex.hold ? holdRow(ex.name, sets) : sets.map((s, i) => setRow(ex.name, s, i)).join("")}</div>
-    <div class="row-actions"><button type="button" class="btn small" data-act="add-set" data-name="${esc(ex.name)}">${ex.hold ? "+ Add hold" : "+ Add set"}</button>
+    <div class="row-actions">${sameLast ? `<button type="button" class="btn small" data-act="same-last" data-name="${esc(ex.name)}">↺ Same as last time</button>` : ""}
+      <button type="button" class="btn small" data-act="add-set" data-name="${esc(ex.name)}">${ex.hold ? "+ Add hold" : "+ Add set"}</button>
       ${ex.hold && sets.length > 1 ? `<button type="button" class="btn link small" data-act="remove-set" data-name="${esc(ex.name)}" data-i="${sets.length - 1}">Remove last</button>` : ""}
       ${ex.dose && !(state.plan.session2 || []).includes(ex.name) ? `<button type="button" class="btn link small muted-link" data-act="swap" data-name="${esc(ex.name)}">Swap</button>` : ""}
       ${ex.dose ? `<button type="button" class="btn link small muted-link" data-act="bothered" data-name="${esc(ex.name)}">Bothered me</button>` : ""}</div>
@@ -222,7 +225,7 @@ function warmupCard(ex) {
   return `<div class="card" data-card="${esc(key)}">
     <button type="button" class="check${on ? " on" : ""}" data-act="check" data-name="${esc(ex.name)}" aria-pressed="${on}">
       <span class="box">✓</span>
-      <span><span class="name">${esc(ex.name)}</span><span class="sub" style="display:block">${esc(ex.dose || "")}</span></span>
+      <span><span class="name">${esc(ex.name)}</span>${ex.pt ? ` <span class="badge">PT</span>` : ""}<span class="sub" style="display:block">${esc(ex.dose || "")}</span></span>
     </button>
     ${ex.hold && !on ? `<button type="button" class="btn small" data-act="warmup-timer" data-name="${esc(ex.name)}">▶ Start ${fmtSecs(ex.hold_secs || 60)} timer</button>` : ""}
     ${hasHowTo(ex) ? toggleButton(key) + (state.open.has(key) ? howTo(ex) : "") : ""}
@@ -309,7 +312,8 @@ function renderToday() {
         ? "Today is gentle recovery work."
         : "One fewer exercise, a quarter less cardio, and no load increases."} You can turn this off in Settings.</div></div>` : ""}
     ${p.snow_sport ? snowCard(p) : ""}
-    ${p.coach_changes ? `<div class="small muted">Today's plan has added sessions or coach changes. <button type="button" class="btn link small" data-act="reset-plan">Undo them</button></div>` : ""}
+    ${skiDueCard(p)}
+    ${p.coach_changes ?`<div class="small muted">Today's plan has added sessions or coach changes. <button type="button" class="btn link small" data-act="reset-plan">Undo them</button></div>` : ""}
     <h2>1. Daily non-negotiables</h2>
     ${p.warmup.map(warmupCard).join("")}
 
@@ -344,6 +348,17 @@ function renderToday() {
     ${secondSessionSection(p)}`;
 }
 
+function skiDueCard(p) {
+  if (!p.ski_due) return "";
+  return `<div class="card season"><strong>⛷️ Ski readiness check due</strong>
+    <div class="sub">Six quick tests (wall sit, balance, skater steps, side plank), about 10 minutes. Best before a workout, when you're fresh.</div>
+    <div class="row-actions"><button type="button" class="btn small" data-act="ski-go">Open the check</button></div></div>`;
+}
+
+function prList(prs) {
+  return prs?.length ? `<ul class="prs">${prs.map((x) => `<li>🏆 <strong>${esc(x.exercise)}</strong>: ${esc(x.text)}</li>`).join("")}</ul>` : "";
+}
+
 function doneSummary(d) {
   const bits = [];
   if (d.exercises) bits.push(`${d.exercises} exercise${d.exercises === 1 ? "" : "s"}, ${d.sets} set${d.sets === 1 ? "" : "s"}`);
@@ -358,8 +373,10 @@ function renderTodayDone(p) {
   $view.innerHTML = `
     <div class="card done-card"><h3>✅ Today's workout is done</h3>
       <p class="sub">${esc(doneSummary(d) || "Saved to History.")}</p>
+      ${prList(d.prs)}
       <div class="row-actions"><button type="button" class="btn small" data-act="goto" data-v="history">View in History</button></div></div>
     ${p.snow_sport ? snowCard(p) : ""}
+    ${skiDueCard(p)}
     ${p.cooldown?.cards?.length ? `<h2>${esc(p.cooldown.title || "Cool-down")} <span class="muted">(optional)</span></h2>
     <p class="small muted" style="margin-top:0">${esc(p.cooldown.note)}</p>
     <div class="row-actions" style="margin:0 0 10px"><button type="button" class="btn small" data-act="guided-cooldown" data-v="45">▶ Play guided cool-down</button></div>
@@ -371,7 +388,7 @@ function renderTodayDone(p) {
 function secondSessionSection(p) {
   if (p.done?.["2"]) {
     return `<h2>Second session</h2><div class="card done-card"><h3>✅ Second session done</h3>
-      <p class="sub">${esc(doneSummary(p.done["2"]) || "Saved to History.")}</p></div>`;
+      <p class="sub">${esc(doneSummary(p.done["2"]) || "Saved to History.")}</p>${prList(p.done["2"].prs)}</div>`;
   }
   const names = p.session2 || [];
   const has = names.length || p.extra_cardio;
@@ -412,12 +429,12 @@ async function completeWorkout(btn, session = 1) {
   btn.textContent = "Saving…";
   clearTimeout(saveTimer);
   try {
-    await api("api/complete", {
+    const res = await api("api/complete", {
       method: "POST",
       body: JSON.stringify({
         rpe: Number(session === 2 ? state.finish.rpe2 : state.finish.rpe), pelvic_floor: Number(state.finish.pf),
         kidney: Number(state.finish.kidney), notes: session === 2 ? state.finish.notes2 : state.finish.notes,
-        tracker: draftRows(), session,
+        tracker: draftRows(), checks: state.checks, session,
       }),
     });
     if (session === 1) {
@@ -432,9 +449,11 @@ async function completeWorkout(btn, session = 1) {
       store.set(finishKey(), state.finish);
     }
     state.history = null;
+    stopTimer(false);   // no rest timer once the workout is saved
     toast(session === 2 ? "Second session saved to History 💪" : "Workout saved to History 💪 Done for today.");
     await refreshPlan();
     window.scrollTo({ top: 0 });
+    if (res.prs?.length) showTrophies(res.prs);
   } catch (err) {
     if (err.status === 409) {
       toast("Already logged today.");
@@ -470,6 +489,95 @@ function chart(days) {
     <div class="legend"><span><i style="background:var(--accent)"></i>Heaviest lbs</span><span><i style="background:var(--ok)"></i>Total reps</span></div>`;
 }
 
+// Symptoms over time: kidney and pelvic floor (same 1-10 scale, one axis) above, that day's workout effort below.
+// Gaps are days with no score. Hover or tap a day for its numbers; the table under it has the same data.
+function symptomChart(series) {
+  if (!series.some((s) => s.kidney != null || s.effort != null)) return `<div class="empty">No scores in this period yet.</div>`;
+  const W = 340, P = 22, PR = 62, TOP = 10, H1 = 120, GAP = 14, H2 = 44, n = series.length;
+  const plotW = W - P - PR;
+  const x = (i) => P + (n === 1 ? plotW / 2 : (i * plotW) / (n - 1));
+  const y = (v) => TOP + (1 - v / 10) * H1;
+  const base2 = TOP + H1 + GAP + H2;
+  const line = (k) => {
+    let d = "", pen = false;
+    series.forEach((s, i) => {
+      if (s[k] == null) { pen = false; return; }
+      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(s[k]).toFixed(1)}`;
+      pen = true;
+    });
+    return d;
+  };
+  const dots = (k, cls) => series.map((s, i) => s[k] == null ? "" :
+    `<circle class="${cls}" cx="${x(i).toFixed(1)}" cy="${y(s[k]).toFixed(1)}" r="4"/>`).join("");
+  const bw = Math.max(2, Math.min(8, plotW / n - 2));
+  const bars = series.map((s, i) => {
+    if (!s.effort) return "";
+    const h = (s.effort / 10) * H2;
+    return `<rect class="effort" x="${(x(i) - bw / 2).toFixed(1)}" y="${(base2 - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(2, bw / 2)}"/>`;
+  }).join("");
+  // Direct labels at each line's last point, nudged apart when they'd overlap
+  const lastOf = (k) => { for (let i = n - 1; i >= 0; i--) if (series[i][k] != null) return { i, v: series[i][k] }; return null; };
+  const lk = lastOf("kidney"), lp = lastOf("pf");
+  let yk = lk && y(lk.v) + 4, yp = lp && y(lp.v) + 4;
+  if (lk && lp && Math.abs(yk - yp) < 12) { const mid = (yk + yp) / 2; yk = mid + (lk.v >= lp.v ? -6 : 6); yp = mid + (lk.v >= lp.v ? 6 : -6); }
+  const label = (l, yy, cls, text) => l ? `<line class="${cls}" x1="${W - PR + 6}" x2="${W - PR + 14}" y1="${yy - 4}" y2="${yy - 4}"/>
+    <text x="${W - PR + 17}" y="${yy}" class="axis-text">${text} ${l.v}</text>` : "";
+  const hits = series.map((s, i) => {
+    const w = n === 1 ? plotW : plotW / (n - 1);
+    const tip = `${formatDate(s.date)}: kidney ${s.kidney ?? "–"}, pelvic floor ${s.pf ?? "–"}${s.effort ? `, ${s.type || "workout"} effort ${s.effort}` : ", no workout"}`;
+    return `<rect class="hit" x="${(x(i) - w / 2).toFixed(1)}" y="0" width="${w.toFixed(1)}" height="${base2}"><title>${esc(tip)}</title></rect>`;
+  }).join("");
+  const grid = [0, 5, 10].map((v) => `<line class="grid" x1="${P}" x2="${W - PR}" y1="${y(v)}" y2="${y(v)}"/>
+    <text x="${P - 4}" y="${y(v) + 4}" text-anchor="end" class="axis-text">${v}</text>`).join("");
+  return `<div class="legend"><span><i class="sw-kidney"></i>Kidney / flank</span><span><i class="sw-pf"></i>Pelvic floor</span><span><i class="sw-effort"></i>Workout effort</span></div>
+    <svg viewBox="0 0 ${W} ${base2 + 18}" role="img" aria-label="Kidney and pelvic floor scores by day, with workout effort below">
+      ${grid}
+      <path class="ln-kidney" d="${line("kidney")}"/><path class="ln-pf" d="${line("pf")}"/>
+      ${dots("kidney", "dot-kidney")}${dots("pf", "dot-pf")}
+      ${label(lk, yk, "ln-kidney", "Kidney")}${label(lp, yp, "ln-pf", "Pelvic")}
+      <text x="${P}" y="${TOP + H1 + GAP - 2}" class="axis-text">Effort (0–10)</text>
+      <line class="grid" x1="${P}" x2="${W - PR}" y1="${base2}" y2="${base2}"/>
+      ${bars}
+      <text x="${P}" y="${base2 + 14}" class="axis-text">${esc(formatDate(series[0].date))}</text>
+      <text x="${W - PR}" y="${base2 + 14}" text-anchor="end" class="axis-text">${esc(formatDate(series[n - 1].date))}</text>
+      ${hits}
+    </svg>`;
+}
+
+function trendTable(t) {
+  const rows = t.series.filter((s) => s.kidney != null || s.effort);
+  return `<details class="small"><summary>Show as a table</summary>
+    <table><thead><tr><th>Day</th><th>Kidney</th><th>Pelvic floor</th><th>Workout</th></tr></thead><tbody>
+    ${rows.map((s) => `<tr><td>${esc(formatDate(s.date))}</td><td>${s.kidney ?? ""}</td><td>${s.pf ?? ""}</td>
+      <td>${s.effort ? `${esc(s.type || "")} · effort ${s.effort}` : ""}</td></tr>`).join("")}</tbody></table></details>`;
+}
+
+function trendBody(t) {
+  return `${symptomChart(t.series)}
+    <ul class="insights">${t.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    ${t.by_type.some((r) => r.n >= 2) ? `<table><thead><tr><th>Morning after</th><th>Days</th><th>Kidney</th><th>Pelvic floor</th></tr></thead><tbody>
+      ${t.by_type.filter((r) => r.n >= 2).map((r) => `<tr><td>${esc(r.type)}</td><td>${r.n}</td><td>${r.kidney ?? ""}</td><td>${r.pf ?? ""}</td></tr>`).join("")}
+      </tbody></table>` : ""}
+    ${trendTable(t)}`;
+}
+
+function trendSection() {
+  const days = state.trendDays;
+  if (!state.trends || state.trends.days !== days) {
+    api(`api/trends?days=${days}`).then((t) => {
+      state.trends = t;
+      const box = document.getElementById("trend-body");
+      if (box) box.innerHTML = trendBody(t);
+    }).catch(() => {});
+  }
+  return `<h2>How you've felt</h2>
+    <div class="card">
+      <div class="chips wrap" style="margin-bottom:8px">${[14, 30, 60, 90].map((d) =>
+        `<button type="button" class="chip${d === days ? " on" : ""}" data-act="trend-days" data-v="${d}">${d} days</button>`).join("")}</div>
+      <div id="trend-body" class="chart">${state.trends?.days === days ? trendBody(state.trends) : `<div class="spinner">Loading…</div>`}</div>
+    </div>`;
+}
+
 async function loadProgress(exercise) {
   state.progress = { exercise, days: (await api(`api/progress?exercise=${encodeURIComponent(exercise)}`)).days };
   const el = document.getElementById("chart");
@@ -488,9 +596,11 @@ function workoutCard(w) {
         <span class="pill">Flank ${w.kidney_flank_pain ?? "?"}/10</span>
         <span class="pill">Pelvic floor ${w.pelvic_floor_tightness ?? "?"}/10</span>
         ${w.sets.length ? `<span class="pill">${plural(w.sets.filter((s) => s.done).length, "set")}</span>` : ""}
+        ${w.workout?.prs?.length ? `<span class="pill">🏆 ${plural(w.workout.prs.length, "record")}</span>` : ""}
       </div>
     </button>
     ${open ? `<div class="howto">
+      ${prList(w.workout?.prs)}
       ${w.workout?.strength?.length ? `<div class="small"><strong>Exercises:</strong> ${esc(w.workout.strength.join(", "))}</div>` : ""}
       ${w.workout?.cardio ? `<div class="small"><strong>Cardio:</strong> ${esc(w.workout.cardio)}</div>` : ""}
       ${sets ? `<table><thead><tr><th>Exercise</th><th>Set</th><th>lbs</th><th>Reps</th><th>✓</th></tr></thead><tbody>${sets}</tbody></table>` : ""}
@@ -515,6 +625,7 @@ async function renderHistory() {
     loadProgress(exercises[0]);
   }
   $view.innerHTML = `
+    ${trendSection()}
     ${exercises.length ? `<h2>Progress</h2>
     <div class="card">
       <select data-act-change="progress" aria-label="Exercise" style="width:100%;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card-2);padding:0 10px">
@@ -526,6 +637,82 @@ async function renderHistory() {
     ${workouts.map(workoutCard).join("")}
     <button type="button" class="btn small" data-act="report">Make an HTML progress report (AI Coach)</button>`;
 }
+
+// --- PT visit report: one printable page to show at appointments -----------------------------------------------------
+
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const ptDays = (days) => (!days?.length ? "every day" : days.map((d) => DAY_NAMES[d]).join(", "));
+
+async function renderReport() {
+  const days = state.reportDays;
+  if (!state.report || state.report.days !== days) {
+    $view.innerHTML = `<div class="spinner">Putting your report together…</div>`;
+    state.report = await api(`api/report/pt?days=${days}`);
+    if (state.tab !== "report") return;
+  }
+  const r = state.report;
+  const t = r.trends;
+  const routine = r.routine_days
+    ? `<table><thead><tr><th>Daily non-negotiable</th><th>Done</th></tr></thead><tbody>
+        ${r.routine.map((x) => `<tr><td>${esc(x.name)}</td><td>${x.done} of ${x.of} workout days</td></tr>`).join("")}</tbody></table>`
+    : `<p class="sub">Ticks on the daily non-negotiables are saved with each workout from this version on, so this fills in from your next workout.</p>`;
+  $view.innerHTML = `
+    <div class="report-head">
+      <div><h2 style="margin:6px 0 2px">PT visit report</h2>
+        <div class="small muted">${esc(formatDate(r.from))} – ${esc(formatDate(r.to))} · Joe's own logged scores (1 = fine, 10 = worst)</div></div>
+      <button type="button" class="btn small noprint" data-act="print">🖨️ Print or save PDF</button>
+    </div>
+    <div class="chips noprint" style="margin:10px 0">${[14, 30, 60, 90].map((d) =>
+      `<button type="button" class="chip${d === days ? " on" : ""}" data-act="report-days" data-v="${d}">Last ${d} days</button>`).join("")}</div>
+    <div class="card stat-grid">
+      <div><div class="stat">${r.workouts}<small> / ${r.planned}</small></div><div class="sub">workouts done / training days planned</div></div>
+      <div><div class="stat">${r.checkins}</div><div class="sub">morning check-ins</div></div>
+      <div><div class="stat">${t.averages.kidney ?? "–"}</div><div class="sub">average kidney / flank</div></div>
+      <div><div class="stat">${t.averages.pf ?? "–"}</div><div class="sub">average pelvic floor</div></div>
+      ${r.snow_days ? `<div><div class="stat">${r.snow_days}</div><div class="sub">snow days</div></div>` : ""}
+      ${r.second_sessions ? `<div><div class="stat">${r.second_sessions}</div><div class="sub">second sessions</div></div>` : ""}
+    </div>
+    <h2>Symptoms</h2>
+    <div class="card chart">${trendBody(t)}</div>
+    <h2>Daily routine</h2>
+    <div class="card">${routine}</div>
+    ${r.pt_exercises.length ? `<h2>PT-prescribed exercises</h2>
+    <div class="card"><table><thead><tr><th>Exercise</th><th>Dose</th><th>When</th></tr></thead><tbody>
+      ${r.pt_exercises.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(p.dose)}</td><td>${esc(ptDays(p.days))}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    <h2>Strength and holds</h2>
+    <div class="card">${r.lifts.length ? `<table><thead><tr><th>Exercise</th><th>Sessions</th><th>First</th><th>Latest</th></tr></thead><tbody>
+      ${r.lifts.map((l) => `<tr><td>${esc(l.exercise)}</td><td>${l.sessions}</td><td>${esc(l.first)}</td><td>${esc(l.latest)}${l.better ? " ↑" : ""}</td></tr>`).join("")}
+      </tbody></table><p class="small muted">First and latest = heaviest weight with its reps, most reps, or longest hold in that session. ↑ = better than the first.</p>`
+      : `<p class="sub">No sets logged in this period.</p>`}</div>
+    ${r.prs.length ? `<h2>Personal records</h2><div class="card"><ul class="prs">${r.prs.map((x) =>
+      `<li>🏆 ${esc(formatDate(x.date))}: <strong>${esc(x.exercise)}</strong>, ${esc(x.text)}</li>`).join("")}</ul></div>` : ""}
+    <h2>Exercises that bothered me</h2>
+    <div class="card">${r.bothered.length ? `<ul class="plain">${r.bothered.map((b) =>
+      `<li><strong>${esc(b.name)}</strong>: marked ${esc(formatDate(b.since))}, ${esc(b.status)}${b.status === "sitting out" ? ` until ${esc(formatDate(b.until))}` : ""}</li>`).join("")}</ul>`
+      : `<p class="sub">Nothing marked in this period.</p>`}</div>
+    ${r.notes.length ? `<h2>Notes</h2><div class="card"><ul class="plain">${r.notes.map((x) =>
+      `<li><span class="muted">${esc(formatDate(x.date))}:</span> ${esc(x.text)}</li>`).join("")}</ul></div>` : ""}
+    <p class="small muted">From the AI Workout Tracker. A personal training log, not a medical record.</p>`;
+}
+
+// --- Personal records: a small celebration when a workout beats your best ------------------------------------------------
+
+const $trophy = document.getElementById("trophy");
+
+function showTrophies(prs) {
+  const bits = Array.from({ length: 18 }, (_, i) =>
+    `<span style="left:${Math.round(Math.random() * 100)}%;animation-delay:${(Math.random() * 0.8).toFixed(2)}s">${["🎉", "✨", "🏆", "💪"][i % 4]}</span>`).join("");
+  $trophy.innerHTML = `<div class="confetti" aria-hidden="true">${bits}</div>
+    <div class="trophy-inner"><div class="trophy-cup" aria-hidden="true">🏆</div>
+      <h3>New personal record${prs.length > 1 ? "s" : ""}!</h3>${prList(prs)}
+      <button type="button" class="btn primary" data-trophy="close">Nice 💪</button></div>`;
+  $trophy.hidden = false;
+  try { navigator.vibrate?.([80, 60, 80, 60, 160]); } catch { /* not supported */ }
+}
+
+$trophy.addEventListener("click", (e) => {
+  if (e.target.closest("[data-trophy]") || e.target === $trophy) { $trophy.hidden = true; $trophy.innerHTML = ""; }
+});
 
 // --- Timers: hold countdowns and rest between sets -------------------------------------------------
 // One timer at a time, shown in a bar above the tabs. It beeps and buzzes when time is up and keeps the screen on.
@@ -582,7 +769,9 @@ function drawTimer() {
   if (!timer) return;
   const left = Math.max(0, Math.ceil((timer.end - Date.now()) / 1000));
   if (left <= 0) return stopTimer(true);
-  const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, "0");
+  // "up" timers (ski tests: hold as long as you can) show the time held instead of the time left
+  const shown = timer.up ? Math.floor((Date.now() - timer.start) / 1000) : left;
+  const mm = Math.floor(shown / 60), ss = String(shown % 60).padStart(2, "0");
   $timer.hidden = false;
   $timer.className = `timerbar ${timer.kind}`;
   $timer.innerHTML = `<div class="timer-label">${esc(timer.label)}</div><div class="timer-time">${mm}:${ss}</div>
@@ -695,6 +884,40 @@ $qg.addEventListener("click", (e) => {
 
 // --- Week -------------------------------------------------------------------------------------
 
+// Ski readiness: the same six tests every two weeks until opening day, so you can see the prep working
+function skiFmt(t, v) { return v == null ? "–" : `${v % 1 ? v : Math.round(v)}${t.unit === "s" ? " s" : ""}`; }
+
+function skiCard() {
+  const s = state.ski;
+  if (!s) {
+    api("api/skitests").then((r) => { state.ski = r; if (state.tab === "week") render(); }).catch(() => {});
+    return `<div class="card muted">Loading ski readiness…</div>`;
+  }
+  const res = s.results, first = res[0], last = res[res.length - 1];
+  const table = res.length ? `<table><thead><tr><th>Test</th>${res.length > 1 ? `<th>${esc(formatDate(first.date))}</th>` : ""}<th>${esc(formatDate(last.date))}</th>${res.length > 1 ? "<th>Change</th>" : ""}</tr></thead><tbody>
+    ${s.tests.map((t) => {
+      const a = first.values[t.id], b = last.values[t.id];
+      const ch = res.length > 1 && a != null && b != null ? b - a : null;
+      return `<tr><td>${esc(t.name)}</td>${res.length > 1 ? `<td>${skiFmt(t, a)}</td>` : ""}<td>${skiFmt(t, b)}</td>
+        ${res.length > 1 ? `<td>${ch == null ? "" : `${ch > 0 ? "+" : ""}${skiFmt(t, ch)}${ch > 0 ? " ↑" : ""}`}</td>` : ""}</tr>`;
+    }).join("")}</tbody></table>` : "";
+  const form = state.skiOpen ? `<div class="ski-form">
+    <p class="small muted">Warm up first (the daily non-negotiables). Tap ▶ to start a timer, then <strong>Done now</strong> the moment your form breaks: it fills in your time.</p>
+    ${s.tests.map((t) => `<div class="ski-test">
+      <div><strong>${esc(t.name)}</strong><div class="small muted">${esc(t.how)}</div></div>
+      <div class="ski-row">
+        <label><input type="number" inputmode="numeric" min="0" step="1" id="ski-${t.id}" data-ski="${t.id}" value="${esc(state.skiVals[t.id] ?? "")}" aria-label="${esc(t.name)}"><span class="unit">${esc(t.unit)}</span></label>
+        <button type="button" class="btn small" data-act="ski-timer" data-v="${t.id}">▶ ${t.count ? "30 s timer" : "Timer"}</button>
+      </div></div>`).join("")}
+    <div class="row-actions"><button type="button" class="btn primary" style="width:auto" data-act="ski-save">Save results</button>
+      <button type="button" class="btn link small" data-act="ski-toggle">Cancel</button></div></div>` : "";
+  return `<div class="card${s.due ? " season" : ""}"><strong>⛷️ Ski readiness</strong>
+    <div class="sub">${s.due ? "A check is due now." : `Next check ${esc(formatDate(s.next))}.`} Every ${s.every_days} days: wall sit, single-leg balance, skater steps and side plank.</div>
+    ${table}
+    ${state.skiOpen ? form : `<div class="row-actions"><button type="button" class="btn small" data-act="ski-toggle">${s.due ? "Do the check now (about 10 min)" : "Do a check anyway"}</button></div>`}
+  </div>`;
+}
+
 async function renderWeek() {
   const off = state.weekOffset;
   if (!state.week || state.week.offset !== off) state.week = await api(`api/week?offset=${off}`);
@@ -714,6 +937,7 @@ async function renderWeek() {
         ${m.ok ? `in your plan, ${esc(m.minutes)} easy minutes` : esc(m.why)}</div>`).join("")}</div>` : ""}
     ${w.season ? `<div class="card season"><strong>${esc(w.season.phase)}</strong>${w.season.days > 0 ? ` · ${w.season.days} day${w.season.days === 1 ? "" : "s"} to opening day` : ""}
       <div class="sub">${esc(w.season.text)}</div></div>` : ""}
+    ${w.season ? skiCard() : ""}
     ${w.days.map((d) => `<div class="card week-day ${d.status}">
       <div class="week-head"><strong>${esc(d.weekday)}</strong> <span class="muted">${esc(formatDate(d.date))}</span>
         <span class="badge">${esc(d.label)}</span>${badge[d.status] ? `<span class="badge${d.status === "missed" ? " bad" : ""}">${badge[d.status]}</span>` : ""}</div>
@@ -876,6 +1100,63 @@ async function loadGarmin() {
   if (state.tab === "settings" && !document.activeElement?.matches?.("input, textarea")) render();
 }
 
+// Exercises your PT gives you: added here, they show up on Today on the days you pick
+function ptSection(list) {
+  const f = state.ptForm;
+  const form = f ? `<div class="pt-form">
+    <label class="sub" for="pt-name">Exercise name</label>
+    <input id="pt-name" class="code-input" style="width:100%" maxlength="80" data-pt="name" value="${esc(f.name)}" placeholder="e.g. Leaky can breathing">
+    <label class="sub" for="pt-dose">Dose</label>
+    <input id="pt-dose" class="code-input" style="width:100%" maxlength="80" data-pt="dose" value="${esc(f.dose)}" placeholder="e.g. 40 breaths · 3 x 10 · 3 x 30 s hold">
+    <div class="small muted">Put seconds in the dose (like "3 x 30 s hold") and it gets a timer.</div>
+    <label class="sub" for="pt-cues">How to do it (one step per line)</label>
+    <textarea id="pt-cues" data-pt="cues" placeholder="What your PT told you">${esc(f.cues)}</textarea>
+    <div class="sub" style="margin-top:8px">Where it goes</div>
+    <div class="chips wrap">${[["warmup", "Daily non-negotiables (tick box)"], ["strength", "With strength (sets)"]].map(([v, l]) =>
+      `<button type="button" class="chip${f.section === v ? " on" : ""}" data-act="pt-section" data-v="${v}">${l}</button>`).join("")}</div>
+    ${f.section === "strength" ? `<label class="sub" for="pt-sets">Sets (a dose like "2 x 12" sets this for you)</label>
+      <input id="pt-sets" type="number" min="1" max="10" class="code-input" style="width:90px" data-pt="sets" value="${esc(f.sets)}">` : ""}
+    <div class="sub" style="margin-top:8px">Which days</div>
+    <div class="chips wrap"><button type="button" class="chip${f.days.length ? "" : " on"}" data-act="pt-day" data-v="all">Every day</button>
+      ${DAY_NAMES.map((d, i) => `<button type="button" class="chip${f.days.includes(i) ? " on" : ""}" data-act="pt-day" data-v="${i}">${d}</button>`).join("")}</div>
+    <div class="row-actions"><button type="button" class="btn primary" style="width:auto" data-act="pt-save">Save</button>
+      <button type="button" class="btn link small" data-act="pt-cancel">Cancel</button></div></div>` : "";
+  return `<h2>From your PT</h2>
+    <div class="card">
+      <p class="sub" style="margin:0 0 8px">Exercises your physio gives you. They show up on Today on the days you pick, with a PT tag, and go in the PT report.</p>
+      ${list.map((p, i) => `<div class="paused-row"><span><strong>${esc(p.name)}</strong>
+        <span class="small muted" style="display:block">${esc(p.dose || "no dose set")} · ${esc(ptDays(p.days))} · ${p.section === "strength" ? `${p.sets} sets with strength` : "daily non-negotiables"}</span></span>
+        <span style="white-space:nowrap"><button type="button" class="btn link small" data-act="pt-edit" data-i="${i}">Edit</button>
+        <button type="button" class="btn link small muted-link" data-act="pt-remove" data-i="${i}">Remove</button></span></div>`).join("")}
+      ${f ? form : `<div class="row-actions"><button type="button" class="btn small" data-act="pt-edit" data-i="-1">+ Add an exercise from my PT</button></div>`}
+    </div>`;
+}
+
+const isInstalled = () => window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+
+function installCard() {
+  if (isInstalled()) return `<div class="card"><h3>Installed ✓</h3><p class="sub">You're using the home-screen app.</p></div>`;
+  const a = state.install;
+  if (!a) {
+    api("api/install").then((r) => { state.install = r; if (state.tab === "settings") renderSettings(); }).catch(() => { state.install = { url: null }; if (state.tab === "settings") renderSettings(); });
+    return `<div class="card muted">Checking…</div>`;
+  }
+  if (!a.url) {
+    return `<div class="card"><p class="sub" style="margin:0">To install it, publish the add-on's port first: in Home Assistant go to Settings › Add-ons › AI Workout Tracker ›
+      Configuration, and under <strong>Network</strong> enter <strong>8501</strong>. Save, restart the add-on, then come back here.</p></div>`;
+  }
+  return `<div class="card">
+    <p class="sub" style="margin:0 0 8px">Gives you a Workouts icon on your phone that opens full screen, straight to Today, without the Home Assistant frame.</p>
+    <ol class="steps">
+      <li>On your phone, on home Wi-Fi, open <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a>
+        <button type="button" class="btn link small" data-act="copy" data-v="${esc(a.url)}">Copy</button>${a.fallback ? `<br><span class="small muted">If that doesn't open, try ${esc(a.fallback)}</span>` : ""}</li>
+      <li><strong>iPhone (Safari):</strong> Share ⬆️ › Add to Home Screen.<br><strong>Android (Chrome):</strong> ⋮ › Add to Home screen.</li>
+    </ol>
+    <p class="small muted">It works at home or over a VPN to home. Away from home, use the Home Assistant app as usual. This address has no login of its own,
+      so anyone on your home Wi-Fi could open it (that's already true with the port published). On Android, Chrome may keep its address bar on a plain http address.</p>
+  </div>`;
+}
+
 async function renderSettings() {
   if (!state.garmin) loadGarmin();
   if (!state.claude) loadClaude();
@@ -885,6 +1166,7 @@ async function renderSettings() {
   const c = state.claude;
   const sports = new Set(s.sports);
   $view.innerHTML = `
+    ${ptSection(s.pt_exercises || [])}
     <h2>Sports</h2>
     <div class="card">
       <p class="sub" style="margin:0 0 10px">What you're training for. Your daily extras and the coach follow this. Everything still goes through your kidney and pelvic-floor safety filter.</p>
@@ -930,6 +1212,8 @@ async function renderSettings() {
       <input type="url" id="media-url" class="code-input" style="width:100%" value="${esc(s.media_base_url)}" placeholder="https://…/workout/yoga">
       <div class="row-actions"><button type="button" class="btn small" data-act="save-media">Save</button></div>
     </div>`}
+    <h2>Install as an app</h2>
+    ${installCard()}
     <h2>Home Assistant</h2>
     ${haCard()}
     <h2>Garmin</h2>
@@ -1252,6 +1536,93 @@ const actions = {
     rerenderCard(`s:${name}`);
     scheduleSave();
     if (s.done) startTimer({ kind: "rest", label: "Rest", secs: Number(ex.rest_secs) || 60 });
+  },
+  "same-last"(el) {
+    // fill the sets you haven't ticked with exactly what you did last time
+    const name = el.dataset.name;
+    const last = exerciseFor(name).progress?.sets || [];
+    if (!last.length) return;
+    state.sets[name].forEach((s, i) => {
+      if (s.done) return;
+      const l = last[Math.min(i, last.length - 1)];
+      s.weight = l.weight ?? "";
+      s.reps = l.reps ?? "";
+    });
+    rerenderCard(`s:${name}`);
+    scheduleSave();
+  },
+  "ski-go"() { state.skiOpen = true; history.replaceState(null, "", "#week"); showTab("week"); },
+  "ski-toggle"() { state.skiOpen = !state.skiOpen; render(); },
+  "ski-timer"(el) {
+    const t = state.ski?.tests.find((x) => x.id === el.dataset.v);
+    if (!t) return;
+    startTimer({
+      kind: "hold", secs: t.timer, up: !t.count,
+      label:t.count ? `${t.name}: count your landings` : `${t.name}: tap Done now when your form breaks`,
+      onDone(held) {
+        if (t.count) { toast("Time! Type how many landings you counted."); document.getElementById(`ski-${t.id}`)?.focus(); return; }
+        state.skiVals[t.id] = held;
+        const box = document.getElementById(`ski-${t.id}`);
+        if (box) box.value = held;
+      },
+    });
+  },
+  async "ski-save"(el) {
+    const values = {};
+    for (const t of state.ski.tests) {
+      const v = num(document.getElementById(`ski-${t.id}`)?.value);
+      if (v != null) values[t.id] = v;
+    }
+    if (!Object.keys(values).length) { toast("Enter at least one result"); return; }
+    el.disabled = true;
+    try {
+      state.ski = await api("api/skitests", { method: "POST", body: JSON.stringify({ values }) });
+      state.skiOpen = false;
+      state.skiVals = {};
+      refreshPlan().catch(() => {});
+      render();
+      toast("Ski readiness saved ⛷️");
+    } catch { toast("Couldn't save the results"); el.disabled = false; }
+  },
+  "trend-days"(el) { state.trendDays = Number(el.dataset.v); render(); },
+  "report-days"(el) { state.reportDays = Number(el.dataset.v); render(); },
+  print() { window.print(); },
+  copy(el) {
+    const v = el.dataset.v;
+    (navigator.clipboard?.writeText(v) || Promise.reject()).then(() => toast("Copied"), () => prompt("Copy this address:", v));
+  },
+  "pt-edit"(el) {
+    const i = Number(el.dataset.i);
+    const p = (state.settings.pt_exercises || [])[i] || { name: "", dose: "", cues: [], section: "warmup", days: [], sets: 3 };
+    state.ptForm = { i, name: p.name, dose: p.dose, cues: (p.cues || []).join("\n"), section: p.section, days: [...(p.days || [])], sets: p.sets || 3 };
+    renderSettings();
+  },
+  "pt-cancel"() { state.ptForm = null; renderSettings(); },
+  "pt-section"(el) { state.ptForm.section = el.dataset.v; renderSettings(); },
+  "pt-day"(el) {
+    const f = state.ptForm;
+    if (el.dataset.v === "all") f.days = [];
+    else {
+      const d = Number(el.dataset.v);
+      f.days = f.days.includes(d) ? f.days.filter((x) => x !== d) : [...f.days, d].sort();
+      if (f.days.length === 7) f.days = [];
+    }
+    renderSettings();
+  },
+  async "pt-save"() {
+    const f = state.ptForm;
+    if (!f.name.trim()) { toast("Give it a name"); return; }
+    const item = { name: f.name.trim(), dose: f.dose.trim(), cues: f.cues.split("\n").map((c) => c.trim()).filter(Boolean),
+      section: f.section, days: f.days, sets: Number(f.sets) || 3 };
+    const list = [...(state.settings.pt_exercises || [])];
+    if (f.i >= 0) list[f.i] = item; else list.push(item);
+    await savePt(list, f.i >= 0 ? "Saved" : `Added: it's on Today ${ptDays(item.days) === "every day" ? "every day" : `on ${ptDays(item.days)}`}`);
+  },
+  async "pt-remove"(el) {
+    const list = [...(state.settings.pt_exercises || [])];
+    const [gone] = list.splice(Number(el.dataset.i), 1);
+    if (!gone || !confirm(`Remove "${gone.name}"?`)) return;
+    await savePt(list, "Removed");
   },
   "add-set"(el) {
     const sets = state.sets[el.dataset.name];
@@ -1577,6 +1948,17 @@ const actions = {
   },
 };
 
+async function savePt(list, message) {
+  try {
+    state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ pt_exercises: list }) });
+    state.ptForm = null;
+    if (saveTimer) await saveDraft();
+    refreshPlan().catch(() => {});
+    toast(message);
+  } catch { toast("Couldn't save"); }
+  renderSettings();
+}
+
 $view.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
   if (el && actions[el.dataset.act]) actions[el.dataset.act](el, e);
@@ -1586,8 +1968,20 @@ let searchTimer;
 $view.addEventListener("input", (e) => {
   const t = e.target;
   if (t.dataset.field) {
-    state.sets[t.dataset.name][Number(t.dataset.i)][t.dataset.field] = t.value;
+    const sets = state.sets[t.dataset.name], i = Number(t.dataset.i), f = t.dataset.field;
+    const old = String(sets[i][f] ?? "");
+    sets[i][f] = t.value;
+    // the sets after this one that still matched it follow along, so a new weight is typed once
+    for (let j = i + 1; j < sets.length && !sets[j].done && String(sets[j][f] ?? "") === old; j++) {
+      sets[j][f] = t.value;
+      const box = $view.querySelector(`input[data-field="${f}"][data-name="${CSS.escape(t.dataset.name)}"][data-i="${j}"]`);
+      if (box) box.value = t.value;
+    }
     scheduleSave();
+  } else if (t.dataset.pt && state.ptForm) {
+    state.ptForm[t.dataset.pt] = t.value;
+  } else if (t.dataset.ski) {
+    state.skiVals[t.dataset.ski] = t.value;
   } else if (t.dataset.finish) {
     state.finish[t.dataset.finish] = t.value;
     const label = document.getElementById(`val-${t.dataset.finish}`);
@@ -1649,20 +2043,22 @@ document.addEventListener("visibilitychange", () => {
 // --- Tabs -------------------------------------------------------------------------------------
 
 function render() {
-  const views = { more: renderMore, today: renderToday, week: renderWeek, history: renderHistory, coach: renderCoach, library: renderLibrary, mind: renderMindBody, settings: renderSettings };
+  const views = { more: renderMore, today: renderToday, week: renderWeek, history: renderHistory, report: renderReport, coach: renderCoach, library: renderLibrary, mind: renderMindBody, settings: renderSettings };
   Promise.resolve(views[state.tab]()).catch(() => {
     $view.innerHTML = `<div class="empty">Couldn't load this page. Pull down to refresh or try again.</div>`;
   });
 }
 
 // Swipe order. The bottom bar shows five; History, Library and Settings live under More.
-const TAB_ORDER = ["today", "week", "coach", "mind", "history", "library", "settings"];
-const MORE_TABS = ["history", "library", "settings"];
+const TAB_ORDER = ["today", "week", "coach", "mind", "history", "report", "library", "settings"];
+const MORE_TABS = ["history", "report", "library", "settings"];
 const VALID_TABS = [...TAB_ORDER, "more"];
 
 function renderMore() {
-  const items = [["history", "🗓️", "History", "Past workouts and progress charts"], ["library", "📚", "Library", "Search the exercise library"],
-    ["settings", "⚙️", "Settings", "Sports, equipment, voice and Claude connection"]];
+  const items = [["history", "🗓️", "History", "Past workouts, symptom trends and progress charts"],
+    ["report", "📋", "PT report", "One page to show your PT: symptoms, routine, lifts. Printable"],
+    ["library", "📚", "Library", "Search the exercise library"],
+    ["settings", "⚙️", "Settings", "PT exercises, sports, equipment, install as an app"]];
   $view.innerHTML = items.map(([tab, icon, name, sub]) => `<button type="button" class="card more-item" data-act="goto" data-v="${tab}">
       <span class="more-icon" aria-hidden="true">${icon}</span><span><strong>${name}</strong><span class="sub" style="display:block">${sub}</span></span></button>`).join("");
 }
@@ -1692,7 +2088,9 @@ function showTab(tab) {
   state.tab = tab;
   const highlight = MORE_TABS.includes(tab) ? "more" : tab;
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === highlight));
-  if (tab === "history") state.history = null;   // always fresh
+  if (tab === "history") { state.history = null; state.trends = null; }   // always fresh
+  if (tab === "report") state.report = null;
+  if (tab === "week") state.ski = null;
   render();
   window.scrollTo({ top: 0 });
 }
@@ -1701,6 +2099,12 @@ document.querySelector(".tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tab]");
   if (b) history.replaceState(null, "", `#${b.dataset.tab}`), showTab(b.dataset.tab);
 });
+
+// Installed on the home screen (opened at the add-on's own address, not inside Home Assistant): register the service
+// worker that makes it installable and shows a friendly page when Home Assistant can't be reached
+if ("serviceWorker" in navigator && window.top === window && !location.pathname.includes("ingress")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 
 api("api/status").then((s) => { state.status = s; if (state.tab === "coach" || state.tab === "library") render(); }).catch(() => {});
 showTab(location.hash.slice(1) || "today");
