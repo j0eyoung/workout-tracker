@@ -38,7 +38,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.10.1"
+VERSION = "0.10.2"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -351,8 +351,9 @@ def plan():
         "garmin": gsig,
         "season": season,
         # a ski readiness check every two weeks until opening day
+        "at_pt": _pt_here["inside"],
         "bio": {k: v for k, v in insights.bio_status(DB_PATH, datetime.date.fromisoformat(today)).items()
-                if k in ("due", "last", "next")},
+                if k in ("due", "last", "next", "enabled")},
         "ski_due": bool(season and season.get("days", 0) > 0 and insights.ski_status(DB_PATH, datetime.date.fromisoformat(today))["due"]),
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
@@ -943,22 +944,132 @@ def _maybe_remind():
     library.save_settings({"reminder": {**r, "sent": today}})
 
 
+# --- At the PT office: when your phone enters the PT zone, a reminder to ask about new exercises ---------------------
+
+_pt_here = {"inside": False}
+
+
+def _pt_message():
+    names = [p["name"] for p in pt_exercises()]
+    msg = "Ask your PT if there are any new exercises, or changes to the ones you do. Add them in Settings › From your PT."
+    if names:
+        msg += " You're doing now: " + ", ".join(names[:6]) + ("…" if len(names) > 6 else "") + "."
+    if insights.bio_settings()["enabled"]:
+        msg += " Biofeedback today? Log the readings after."
+    return msg
+
+
+def _maybe_pt_visit():
+    """Checked every minute: the first time today the phone is at the PT office, send the reminder."""
+    v = library.load_settings().get("pt_visit") or {}
+    if not (v.get("enabled") and v.get("lat") is not None and v.get("person") and ha.available()):
+        _pt_here["inside"] = False
+        return
+    loc = ha.person_location(v["person"])
+    # within the radius, allowing for GPS accuracy (capped so a vague fix across town doesn't count)
+    _pt_here["inside"] = bool(loc) and ha.distance_m(loc[0], loc[1], v["lat"], v["lon"]) <= \
+        int(v.get("radius") or 150) + min(loc[2], 100)
+    today = history.local_today()
+    service = v.get("service") or (library.load_settings().get("reminder") or {}).get("service")
+    if _pt_here["inside"] and v.get("notified") != today and service:
+        ha.notify(service, "At PT? Ask about new exercises 🏥", _pt_message())
+        library.save_settings({"pt_visit": {**v, "notified": today}})
+
+
 @app.on_event("startup")
 def _start_ha_loop():
     def loop():
         time.sleep(30)
+        tick = 0
         while True:
-            _quietly(ha_refresh)
-            _quietly(_maybe_remind)
-            time.sleep(300)
+            _quietly(_maybe_pt_visit)          # every minute, so the PT reminder comes soon after you arrive
+            if tick % 5 == 0:
+                _quietly(ha_refresh)
+                _quietly(_maybe_remind)
+            tick += 1
+            time.sleep(60)
     threading.Thread(target=loop, daemon=True).start()
 
 
 @app.get("/api/ha")
 def ha_info():
     r = library.load_settings().get("reminder") or {}
-    return {"available": ha.available(), "services": ha.notify_services() if ha.available() else [],
-            "reminder": {"enabled": bool(r.get("enabled")), "time": r.get("time", "07:30"), "service": r.get("service", "")}}
+    v = library.load_settings().get("pt_visit") or {}
+    up = ha.available()
+    return {"available": up, "services": ha.notify_services() if up else [],
+            "reminder": {"enabled": bool(r.get("enabled")), "time": r.get("time", "07:30"), "service": r.get("service", "")},
+            "persons": ha.persons() if up else [],
+            "pt_visit": {"enabled": bool(v.get("enabled")), "address": v.get("address", ""), "label": v.get("label", ""),
+                         "lat": v.get("lat"), "lon": v.get("lon"), "radius": int(v.get("radius") or 150),
+                         "person": v.get("person", ""), "service": v.get("service") or r.get("service", ""),
+                         "inside": _pt_here["inside"]}}
+
+
+class PTVisit(BaseModel):
+    enabled: bool
+    address: str = ""
+    label: str = ""
+    lat: float | None = None
+    lon: float | None = None
+    radius: int = 150
+    person: str = ""
+    service: str = ""
+
+
+@app.post("/api/ha/ptvisit")
+def save_pt_visit(p: PTVisit):
+    if p.enabled and (p.lat is None or p.lon is None):
+        raise HTTPException(400, "Find the PT office address first.")
+    if p.enabled and not p.person:
+        raise HTTPException(400, "Pick whose phone to follow.")
+    old = library.load_settings().get("pt_visit") or {}
+    library.save_settings({"pt_visit": {**old, "enabled": p.enabled, "address": p.address.strip()[:200],
+                                        "label": p.label.strip()[:300], "lat": p.lat, "lon": p.lon,
+                                        "radius": max(50, min(p.radius, 1000)), "person": p.person,
+                                        "service": p.service.strip()}})
+    threading.Thread(target=lambda: _quietly(_maybe_pt_visit), daemon=True).start()
+    return ha_info()
+
+
+class Address(BaseModel):
+    address: str
+
+
+@app.post("/api/ha/ptvisit/find")
+def find_pt_office(a: Address):
+    """Looks the PT office address up on OpenStreetMap."""
+    if len(a.address.strip()) < 5:
+        raise HTTPException(400, "Type the full address.")
+    try:
+        return {"matches": ha.geocode(a.address.strip()[:200])}
+    except Exception as e:
+        return {"matches": [], "error": f"Couldn't look it up ({type(e).__name__})."}
+
+
+class Who(BaseModel):
+    person: str
+
+
+@app.post("/api/ha/ptvisit/here")
+def pt_office_here(w: Who):
+    """Uses the phone's current location as the PT office (tap it while you're there)."""
+    loc = ha.person_location(w.person)
+    if not loc:
+        raise HTTPException(400, "Home Assistant doesn't have a location for that phone yet.")
+    return {"lat": round(loc[0], 6), "lon": round(loc[1], 6), "accuracy": loc[2]}
+
+
+@app.post("/api/ha/ptvisit/test")
+def test_pt_visit():
+    v = library.load_settings().get("pt_visit") or {}
+    service = v.get("service") or (library.load_settings().get("reminder") or {}).get("service")
+    if not service:
+        raise HTTPException(400, "Pick your phone first.")
+    try:
+        ha.notify(service, "At PT? Ask about new exercises 🏥", _pt_message())
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:120]}"}
 
 
 class Reminder(BaseModel):

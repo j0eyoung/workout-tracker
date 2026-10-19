@@ -3,8 +3,10 @@
 The add-on talks to Home Assistant through the Supervisor (SUPERVISOR_TOKEN, given to add-ons with
 homeassistant_api: true), so there is nothing to set up except picking your phone in Settings."""
 import json
+import math
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 
 CORE = "http://supervisor/core/api"
@@ -42,6 +44,55 @@ def notify_services():
     except Exception:
         pass
     return []
+
+
+def entity(entity_id):
+    """One entity's state as {"state", "attributes"}, or None."""
+    try:
+        return _call("GET", f"{CORE}/states/{entity_id}")
+    except Exception:
+        return None
+
+
+def _states(domain):
+    try:
+        return [s for s in (_call("GET", f"{CORE}/states") or []) if s.get("entity_id", "").startswith(domain + ".")]
+    except Exception:
+        return []
+
+
+def persons():
+    return [{"id": s["entity_id"], "name": s.get("attributes", {}).get("friendly_name") or s["entity_id"],
+             "state": s.get("state")} for s in _states("person")]
+
+
+def person_location(person_id):
+    """(latitude, longitude, accuracy in metres) from the phone's Home Assistant app, or None."""
+    p = entity(person_id) if person_id else None
+    a = (p or {}).get("attributes") or {}
+    if a.get("latitude") is None or a.get("longitude") is None:
+        return None
+    return float(a["latitude"]), float(a["longitude"]), float(a.get("gps_accuracy") or 0)
+
+
+def distance_m(lat1, lon1, lat2, lon2):
+    """Metres between two points (haversine)."""
+    r = 6371000
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
+def geocode(address):
+    """Up to 3 matches for an address from OpenStreetMap (Nominatim): [{"label", "lat", "lon"}]."""
+    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
+        {"q": address, "format": "jsonv2", "limit": 3, "addressdetails": 0})
+    req = urllib.request.Request(url, headers={"User-Agent": "AI-Workout-Tracker/1.0 (Home Assistant add-on)",
+                                               "Accept-Language": "en"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        rows = json.loads(r.read() or b"[]")
+    return [{"label": x.get("display_name", ""), "lat": float(x["lat"]), "lon": float(x["lon"])} for x in rows]
 
 
 _panel = {"url": None}

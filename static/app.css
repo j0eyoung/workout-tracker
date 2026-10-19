@@ -42,6 +42,8 @@ body {
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
 }
 button, input, select, textarea { font: inherit; color: inherit; }
+select { min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2); padding: 0 10px; max-width: 100%; }
+select option { background: var(--card); color: var(--text); }
 .muted { color: var(--muted); font-weight: 400; }
 .small { font-size: 0.85rem; }
 

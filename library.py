@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 import time
 import urllib.request
 
@@ -585,15 +586,20 @@ def load_settings(path=None):
         return {}
 
 
+_settings_lock = threading.Lock()
+
+
 def save_settings(patch, path=None):
+    # one writer at a time: background checks (reminders, PT office) also save, and a lost update would drop a setting
     path = path or SETTINGS_PATH
-    settings = load_settings(path)
-    settings.update(patch)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2)
-    os.replace(tmp, path)
+    with _settings_lock:
+        settings = load_settings(path)
+        settings.update(patch)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+        os.replace(tmp, path)
     return settings
 
 

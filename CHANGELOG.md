@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.2 - PT Office Reminder
+
+### 🌟 Features
+* **A reminder when you get to the PT office.** In Settings › Home Assistant › Reminder at the PT office, type the office address (looked up on OpenStreetMap) or tap "I'm at the office now" while you're there, then pick your phone. When your phone arrives (checked every minute), you get a notification to ask your PT about new or changed exercises, listing the PT exercises you do now, plus a nudge to log biofeedback. While you're there, Today shows buttons to add a PT exercise, log biofeedback and open your PT report.
+* **Add a PT exercise from Today.** "+ Add an exercise from my PT" under the daily non-negotiables opens the form, set up as a daily tick-box every day.
+
+### 🔧 Improvements
+* Drop-down menus are readable in dark mode.
+* Settings saved by background checks can't overwrite each other.
+
 ## 0.10.1 - Pelvic Floor Biofeedback
 
 ### 🌟 Features

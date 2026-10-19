@@ -313,11 +313,13 @@ function renderToday() {
         ? "Today is gentle recovery work."
         : "One fewer exercise, a quarter less cardio, and no load increases."} You can turn this off in Settings.</div></div>` : ""}
     ${p.snow_sport ? snowCard(p) : ""}
+    ${atPtCard(p)}
     ${bioDueCard(p)}
     ${skiDueCard(p)}
     ${p.coach_changes ?`<div class="small muted">Today's plan has added sessions or coach changes. <button type="button" class="btn link small" data-act="reset-plan">Undo them</button></div>` : ""}
     <h2>1. Daily non-negotiables</h2>
     ${p.warmup.map(warmupCard).join("")}
+    <button type="button" class="btn link small" data-act="pt-add-go">+ Add an exercise from my PT</button>
 
     <h2>2. Strength &amp; stability</h2>
     ${p.strength.filter((e) => !(p.session2 || []).includes(e.name)).map(strengthCard).join("")}
@@ -348,6 +350,15 @@ function renderToday() {
       <button type="button" class="btn primary" data-act="complete" data-session="1">Complete workout</button>
     </div>
     ${secondSessionSection(p)}`;
+}
+
+function atPtCard(p) {
+  if (!p.at_pt) return "";
+  return `<div class="card season"><strong>🏥 You're at the PT office</strong>
+    <div class="sub">Ask your PT: any new exercises, or changes to the ones you do now? Add them here so they show up every day.</div>
+    <div class="row-actions"><button type="button" class="btn small" data-act="pt-add-go">+ Add a PT exercise</button>
+      ${p.bio?.enabled ? `<button type="button" class="btn small" data-act="bio-go">Log biofeedback</button>` : ""}
+      <button type="button" class="btn small" data-act="goto" data-v="report">Show my PT report</button></div></div>`;
 }
 
 function bioDueCard(p) {
@@ -387,6 +398,7 @@ function renderTodayDone(p) {
       ${prList(d.prs)}
       <div class="row-actions"><button type="button" class="btn small" data-act="goto" data-v="history">View in History</button></div></div>
     ${p.snow_sport ? snowCard(p) : ""}
+    ${atPtCard(p)}
     ${bioDueCard(p)}
     ${skiDueCard(p)}
     ${p.cooldown?.cards?.length ? `<h2>${esc(p.cooldown.title || "Cool-down")} <span class="muted">(optional)</span></h2>
@@ -1196,6 +1208,42 @@ function haCard() {
   </div>`;
 }
 
+// At the PT office: a zone in Home Assistant around the office; arriving there sends the "ask about new exercises" reminder
+function ptVisitCard() {
+  const h = state.ha;
+  if (!h || !h.available) return "";
+  const v = h.pt_visit || {};
+  const d = state.ptv ||= { enabled: v.enabled, address: v.address || "", label: v.label || "", lat: v.lat, lon: v.lon,
+    radius: v.radius || 150, person: v.person || h.persons[0]?.id || "", service: v.service || h.services[0] || "", matches: null, msg: "" };
+  const where = d.lat != null
+    ? `<div class="small" style="margin-top:6px">📍 ${esc(d.label || `${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}`)}
+        <a href="https://www.openstreetmap.org/?mlat=${d.lat}&mlon=${d.lon}#map=17/${d.lat}/${d.lon}" target="_blank" rel="noopener">map</a></div>`
+    : "";
+  return `<div class="card"><h3>Reminder at the PT office</h3>
+    <label class="toggle"><input type="checkbox" data-ptv="enabled" ${d.enabled ? "checked" : ""}> When I arrive, remind me to ask about new exercises</label>
+    <label class="sub" for="ptv-address" style="display:block;margin-top:8px">PT office address</label>
+    <div class="composer" style="position:static;padding:0">
+      <input id="ptv-address" class="code-input" data-ptv="address" value="${esc(d.address)}" placeholder="Street, town" autocomplete="street-address">
+      <button type="button" class="btn small" style="width:auto" data-act="ptv-find">Find</button></div>
+    ${d.matches ? (d.matches.length ? `<div class="small muted" style="margin-top:6px">Pick the right one:</div>
+      ${d.matches.map((m, i) => `<button type="button" class="btn small" style="display:block;width:100%;text-align:left;margin-top:6px;height:auto;padding:8px 12px"
+        data-act="ptv-pick" data-i="${i}">${esc(m.label)}</button>`).join("")}`
+      : `<div class="small" style="margin-top:6px">No match. Try adding the town or postcode, or use your location while you're there.</div>`) : ""}
+    <button type="button" class="btn link small" data-act="ptv-here">📍 I'm at the office now: use my current location</button>
+    ${where}
+    <div class="sub" style="margin-top:8px">Counts as "there" within</div>
+    <div class="chips wrap">${[100, 150, 300].map((r) => `<button type="button" class="chip${d.radius === r ? " on" : ""}" data-act="ptv-radius" data-v="${r}">${r} m</button>`).join("")}</div>
+    <div class="two-col" style="margin-top:8px">
+      <select data-ptv="person" aria-label="Whose phone">${h.persons.length ? h.persons.map((x) => `<option value="${esc(x.id)}"${x.id === d.person ? " selected" : ""}>${esc(x.name)}</option>`).join("") : `<option value="">No people in Home Assistant</option>`}</select>
+      <select data-ptv="service" aria-label="Notify phone">${h.services.map((s) => `<option value="${esc(s)}"${s === d.service ? " selected" : ""}>${esc(s.replace(/^mobile_app_/, "").replace(/_/g, " "))}</option>`).join("")}</select>
+    </div>
+    <p class="small muted">Uses your phone's location from the Home Assistant app, checked every minute; it comes once per visit day and lists the PT exercises you're doing now.
+      The address is looked up on OpenStreetMap. ${v.inside ? "<strong>You're at the PT office now.</strong>" : ""}</p>
+    ${d.msg ? `<div class="small" style="color:var(--accent)">${esc(d.msg)}</div>` : ""}
+    <div class="row-actions"><button type="button" class="btn small" data-act="ptv-save">Save</button>
+      <button type="button" class="btn small" data-act="ptv-test" ${h.services.length ? "" : "disabled"}>Send a test</button></div></div>`;
+}
+
 function garminCard() {
   const g = state.garmin;
   if (!g) return `<div class="card muted">Checking Garmin…</div>`;
@@ -1360,6 +1408,7 @@ async function renderSettings() {
     ${installCard()}
     <h2>Home Assistant</h2>
     ${haCard()}
+    ${ptVisitCard()}
     <h2>Garmin</h2>
     ${garminCard()}
     <h2>AI Coach</h2>
@@ -1701,6 +1750,60 @@ const actions = {
     history.replaceState(null, "", "#history");
     showTab("history");
     setTimeout(() => document.getElementById("bio-form")?.scrollIntoView({ block: "start" }), 600);
+  },
+  async "pt-add-go"() {
+    // straight to the "add a PT exercise" form in Settings, set up as a daily tick-box every day
+    state.ptForm = { i: -1, name: "", dose: "", cues: "", section: "warmup", days: [], sets: 3 };
+    history.replaceState(null, "", "#settings");
+    showTab("settings");
+    setTimeout(() => { document.getElementById("pt-name")?.scrollIntoView({ block: "center" }); document.getElementById("pt-name")?.focus(); }, 700);
+  },
+  async "ptv-find"(el) {
+    const d = state.ptv;
+    if ((d.address || "").trim().length < 5) { toast("Type the full address"); return; }
+    el.disabled = true; el.textContent = "Finding…";
+    try {
+      const r = await api("api/ha/ptvisit/find", { method: "POST", body: JSON.stringify({ address: d.address }) });
+      d.matches = r.matches;
+      d.msg = r.error || "";
+      if (r.matches.length === 1) Object.assign(d, { lat: r.matches[0].lat, lon: r.matches[0].lon, label: r.matches[0].label, matches: null });
+    } catch { d.msg = "Couldn't look it up."; }
+    renderSettings();
+  },
+  "ptv-pick"(el) {
+    const d = state.ptv, m = d.matches[Number(el.dataset.i)];
+    Object.assign(d, { lat: m.lat, lon: m.lon, label: m.label, matches: null, msg: "" });
+    renderSettings();
+  },
+  async "ptv-here"() {
+    const d = state.ptv;
+    if (!d.person) { toast("Pick whose phone first"); return; }
+    try {
+      const r = await api("api/ha/ptvisit/here", { method: "POST", body: JSON.stringify({ person: d.person }) });
+      Object.assign(d, { lat: r.lat, lon: r.lon, label: `Where you are now (±${Math.round(r.accuracy)} m)`, matches: null, msg: "" });
+    } catch { d.msg = "Home Assistant doesn't have a location for that phone. Check the app's location permission."; }
+    renderSettings();
+  },
+  "ptv-radius"(el) { state.ptv.radius = Number(el.dataset.v); renderSettings(); },
+  async "ptv-save"() {
+    const d = state.ptv;
+    try {
+      state.ha = await api("api/ha/ptvisit", { method: "POST", body: JSON.stringify({
+        enabled: Boolean(d.enabled), address: d.address, label: d.label, lat: d.lat, lon: d.lon, radius: d.radius,
+        person: d.person, service: d.service }) });
+      state.ptv = null;
+      toast("Saved");
+      renderSettings();
+    } catch (err) {
+      state.ptv.msg = err.status === 400 ? (JSON.parse(err.message || "{}").detail || "Check the address and phone") : "Couldn't save";
+      renderSettings();
+    }
+  },
+  async "ptv-test"() {
+    try {
+      const r = await api("api/ha/ptvisit/test", { method: "POST" });
+      toast(r.ok ? "Test sent. Check your phone." : `Couldn't send: ${r.error}`);
+    } catch { toast("Pick your phone and save first"); }
   },
   "bio-new"() { state.bioForm = { date: state.plan?.date || "", values: {}, notes: "" }; render(); },
   "bio-cancel"() { state.bioForm = null; render(); },
@@ -2185,6 +2288,8 @@ $view.addEventListener("input", (e) => {
       if (box) box.value = t.value;
     }
     scheduleSave();
+  } else if (t.dataset.ptv && state.ptv) {
+    state.ptv[t.dataset.ptv] = t.type === "checkbox" ? t.checked : t.value;
   } else if (t.dataset.bio && state.bioForm) {
     const k = t.dataset.bio;
     if (k === "date" || k === "notes") state.bioForm[k] = t.value;
