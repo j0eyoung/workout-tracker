@@ -38,6 +38,12 @@ SCHEMA = [
         test TEXT,               -- insights.SKI_TESTS id
         value REAL               -- seconds or count
     )""",
+    """CREATE TABLE IF NOT EXISTS biofeedback (
+        date TEXT PRIMARY KEY,   -- day of the session with the pelvic PT
+        data JSON,               -- {measure id: value} (insights.BIOFEEDBACK)
+        unit TEXT,               -- mmHg, cmH2O or uV for the pressure readings
+        notes TEXT
+    )""",
 ]
 
 

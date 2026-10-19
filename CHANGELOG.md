@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1 - Pelvic Floor Biofeedback
+
+### 🌟 Features
+* **Track your manometric biofeedback sessions.** Turn it on in Settings › Pelvic floor biofeedback (pick your PT's unit: mmHg, cmH2O or µV, and how often you go). After each session, log resting tone, peak squeeze, endurance hold, time to relax after a squeeze, quick flicks and resting tone at the end, plus what your PT said; leave any blank. History charts resting tone and peak squeeze and shows first vs latest for each reading with "better" or "not yet" (lower resting tone and faster relaxing count as better for a tight pelvic floor). Today reminds you when the next session is due (or snooze it 3 days), the PT report includes it, and the coach can see it.
+
 ## 0.10.0 - PT Exercises, PT Report, Trends, Ski Checks, Records, Install
 
 ### 🌟 Features

@@ -38,7 +38,7 @@ from engine import WorkoutEngine
 from exercises import CARDIO_IMAGES, GUIDES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.10.0"
+VERSION = "0.10.1"
 
 app = FastAPI(title="AI Workout Tracker")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
@@ -351,6 +351,8 @@ def plan():
         "garmin": gsig,
         "season": season,
         # a ski readiness check every two weeks until opening day
+        "bio": {k: v for k, v in insights.bio_status(DB_PATH, datetime.date.fromisoformat(today)).items()
+                if k in ("due", "last", "next")},
         "ski_due": bool(season and season.get("days", 0) > 0 and insights.ski_status(DB_PATH, datetime.date.fromisoformat(today))["due"]),
         "phase": phase,
         "coach_changes": len(planedit.overrides_for(today)),
@@ -456,6 +458,48 @@ def symptom_trends(days: int = 30):
     """Kidney and pelvic floor scores by day with workout effort, and the patterns in them."""
     return insights.trends(DB_PATH, max(7, min(days, 120)), datetime.date.fromisoformat(history.local_today()),
                            selected_sports())
+
+
+@app.get("/api/biofeedback")
+def biofeedback():
+    """Manometric biofeedback sessions with the pelvic PT, and whether the next one is due to be logged."""
+    return insights.bio_status(DB_PATH, datetime.date.fromisoformat(history.local_today()))
+
+
+class BioSession(BaseModel):
+    date: str
+    values: dict[str, float | None] = {}
+    notes: str = ""
+
+
+@app.post("/api/biofeedback")
+def save_biofeedback(b: BioSession):
+    try:
+        d = datetime.date.fromisoformat(b.date)
+    except ValueError:
+        raise HTTPException(400, "The date must look like 2026-10-19.")
+    if d > datetime.date.fromisoformat(history.local_today()):
+        raise HTTPException(400, "That date is in the future.")
+    if not insights.save_bio(DB_PATH, d.isoformat(), b.values, b.notes, insights.bio_settings()["unit"]):
+        raise HTTPException(400, "Enter at least one reading or a note.")
+    return biofeedback()
+
+
+@app.delete("/api/biofeedback/{date}")
+def delete_biofeedback(date: str):
+    insights.delete_bio(DB_PATH, date)
+    return biofeedback()
+
+
+class Snooze(BaseModel):
+    days: int = 3
+
+
+@app.post("/api/biofeedback/snooze")
+def snooze_biofeedback(s: Snooze):
+    until = datetime.date.fromisoformat(history.local_today()) + datetime.timedelta(days=max(1, min(s.days, 14)))
+    library.save_settings({"biofeedback": {**(library.load_settings().get("biofeedback") or {}), "snooze_until": until.isoformat()}})
+    return biofeedback()
 
 
 @app.get("/api/report/pt")
@@ -1113,7 +1157,8 @@ def get_settings():
             "machines": readiness.status() if "triathlon" not in selected_sports() else None,
             "gear_notes": library.load_settings().get("gear_notes", library.DEFAULT_GEAR_NOTES),
             "garmin_adjust": bool(library.load_settings().get("garmin_adjust", False)),
-            "pt_exercises": pt_exercises()}
+            "pt_exercises": pt_exercises(),
+            "biofeedback": insights.bio_settings(), "bio_units": insights.BIO_UNITS}
 
 
 def _clean_pt(items):
@@ -1148,11 +1193,21 @@ class Settings(BaseModel):
     sports: list[str] | None = None
     season_start: str | None = None
     pt_exercises: list[dict] | None = None
+    biofeedback: dict | None = None      # {"enabled", "unit", "every_days"}
 
 
 @app.put("/api/settings")
 def put_settings(s: Settings):
     patch = {}
+    if s.biofeedback is not None:
+        old = library.load_settings().get("biofeedback") or {}
+        b = s.biofeedback
+        try:
+            every = max(7, min(int(b.get("every_days", old.get("every_days", 14))), 60))
+        except (TypeError, ValueError):
+            every = 14
+        patch["biofeedback"] = {**old, "enabled": bool(b.get("enabled", old.get("enabled"))), "every_days": every,
+                                "unit": b.get("unit") if b.get("unit") in insights.BIO_UNITS else old.get("unit", "mmHg")}
     if s.pt_exercises is not None:
         patch["pt_exercises"] = _clean_pt(s.pt_exercises)
     if s.equipment is not None:

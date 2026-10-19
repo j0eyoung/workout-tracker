@@ -3,6 +3,7 @@
 Everything here reads the same SQLite history the rest of the add-on writes; nothing is stored except the ski test
 results (ski_tests table) and the records found when a workout is saved (kept in that workout's JSON)."""
 import datetime
+import json
 import sqlite3
 
 import history
@@ -205,7 +206,82 @@ def pt_report(db_path, days, today, goals, warmup_names, is_hold):
         "trends": trends(db_path, days, today, goals), "lifts": lifts(db_path, s_iso, is_hold),
         "bothered": bothered, "notes": notes, "pt_exercises": settings.get("pt_exercises") or [],
         "prs": [dict(p, date=w["date"]) for w in main for p in (w.get("workout") or {}).get("prs", [])],
+        # every session ever (they're every two weeks), so the first one stays the baseline
+        "biofeedback": bio_results(db_path), "bio_measures": BIOFEEDBACK,
     }
+
+
+# --- Pelvic floor biofeedback (manometry with the pelvic PT, about every two weeks) ------------------------------------
+
+BIOFEEDBACK = [
+    {"id": "resting", "name": "Resting tone", "unit": "pressure", "better": "lower",
+     "help": "Pressure with the pelvic floor at rest. For a tight pelvic floor, lower is the goal."},
+    {"id": "peak", "name": "Peak squeeze", "unit": "pressure", "better": "higher",
+     "help": "Highest reading in a maximum contraction."},
+    {"id": "hold", "name": "Endurance hold", "unit": "s", "better": "higher",
+     "help": "How long you held a steady squeeze."},
+    {"id": "relax", "name": "Time to relax after a squeeze", "unit": "s", "better": "lower",
+     "help": "Seconds to drop back to resting tone."},
+    {"id": "quick", "name": "Quick flicks in 10 s", "unit": "count", "better": "higher",
+     "help": "Quick contract-and-let-go reps, each fully relaxed."},
+    {"id": "rest_end", "name": "Resting tone at the end", "unit": "pressure", "better": "lower",
+     "help": "Resting tone after the session's relaxation (down-training) work."},
+]
+BIO_UNITS = ["mmHg", "cmH2O", "µV"]
+
+
+def bio_settings(settings=None):
+    b = (settings if settings is not None else library.load_settings()).get("biofeedback") or {}
+    return {"enabled": bool(b.get("enabled")), "unit": b.get("unit") if b.get("unit") in BIO_UNITS else "mmHg",
+            "every_days": int(b.get("every_days") or 14), "snooze_until": b.get("snooze_until") or ""}
+
+
+def bio_results(db_path):
+    """[{"date", "values", "unit", "notes"}], oldest first."""
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute("SELECT date, data, unit, notes FROM biofeedback ORDER BY date").fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    conn.close()
+    out = []
+    for d, data, unit, notes in rows:
+        try:
+            values = json.loads(data or "{}")
+        except ValueError:
+            values = {}
+        out.append({"date": d, "values": values, "unit": unit or "mmHg", "notes": notes or ""})
+    return out
+
+
+def bio_status(db_path, today):
+    s = bio_settings()
+    results = bio_results(db_path)
+    last = results[-1]["date"] if results else None
+    nxt = (datetime.date.fromisoformat(last) + datetime.timedelta(days=s["every_days"])) if last else today
+    due = s["enabled"] and nxt <= today and not (s["snooze_until"] and s["snooze_until"] > today.isoformat())
+    return {**s, "measures": BIOFEEDBACK, "units": BIO_UNITS, "results": results, "last": last, "next": nxt.isoformat(),
+            "due": due}
+
+
+def save_bio(db_path, date_iso, values, notes, unit):
+    known = {m["id"] for m in BIOFEEDBACK}
+    clean = {k: round(float(v), 1) for k, v in values.items() if k in known and v is not None and 0 <= float(v) <= 1000}
+    if not clean and not notes.strip():
+        return False
+    conn = sqlite3.connect(db_path)
+    conn.execute("INSERT OR REPLACE INTO biofeedback (date, data, unit, notes) VALUES (?, ?, ?, ?)",
+                 (date_iso, json.dumps(clean), unit, notes.strip()[:1000]))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_bio(db_path, date_iso):
+    conn = sqlite3.connect(db_path)
+    conn.execute("DELETE FROM biofeedback WHERE date = ?", (date_iso,))
+    conn.commit()
+    conn.close()
 
 
 # --- Ski readiness tests ---------------------------------------------------------------------------------------------

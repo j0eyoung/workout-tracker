@@ -247,6 +247,15 @@ pre.notes { white-space: pre-wrap; font: inherit; font-size: 0.88rem; color: var
 .chart .dot-kidney { fill: var(--s-kidney); }
 .chart .dot-pf { fill: var(--s-pf); }
 .chart .effort { fill: var(--muted); opacity: 0.7; }
+/* biofeedback chart: resting tone (slot 1) and peak squeeze (slot 2) */
+.chart .ln-a, .chart .ln-b { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .ln-a { stroke: var(--s-kidney); }
+.chart .ln-b { stroke: var(--s-pf); }
+.chart .dot-a, .chart .dot-b { stroke: var(--card); stroke-width: 2; }
+.chart .dot-a { fill: var(--s-kidney); }
+.chart .dot-b { fill: var(--s-pf); }
+.legend .sw-a { background: var(--s-kidney); }
+.legend .sw-b { background: var(--s-pf); }
 .chart .hit { fill: transparent; }
 .chart .hit:hover { fill: color-mix(in srgb, var(--text) 6%, transparent); }
 .legend .sw-kidney { background: var(--s-kidney); }

@@ -60,6 +60,7 @@ const state = {
   week: null, weekOffset: 0, coachDraft: "", secondOpen: false, ck: null, ckEdit: false, snowOpen: false, snow: null,
   garmin: null, garminMsg: "", ha: null,
   trends: null, trendDays: 30, report: null, reportDays: 30, ski: null, skiOpen: false, skiVals: {}, ptForm: null, install: null,
+  bio: null, bioForm: null,
   voices: null, voice: "lessac", audio: null,
   med: null, medFilter: "all", medShown: 10, medMinutes: 5, medFocus: "", medScript: "", medBusy: false, medError: "",
   lib: { q: "", focus: "", muscle: "", equipment: "", pictures: true, filtered: false, data: null, results: [], offset: 0 },
@@ -312,6 +313,7 @@ function renderToday() {
         ? "Today is gentle recovery work."
         : "One fewer exercise, a quarter less cardio, and no load increases."} You can turn this off in Settings.</div></div>` : ""}
     ${p.snow_sport ? snowCard(p) : ""}
+    ${bioDueCard(p)}
     ${skiDueCard(p)}
     ${p.coach_changes ?`<div class="small muted">Today's plan has added sessions or coach changes. <button type="button" class="btn link small" data-act="reset-plan">Undo them</button></div>` : ""}
     <h2>1. Daily non-negotiables</h2>
@@ -348,6 +350,15 @@ function renderToday() {
     ${secondSessionSection(p)}`;
 }
 
+function bioDueCard(p) {
+  if (!p.bio?.due) return "";
+  return `<div class="card season"><strong>🎯 Pelvic floor biofeedback</strong>
+    <div class="sub">${p.bio.last ? "About time for your next session with your pelvic PT." : "Log your next session with your pelvic PT."}
+      Add the readings afterwards to see your progress.</div>
+    <div class="row-actions"><button type="button" class="btn small" data-act="bio-go">Log my results</button>
+      <button type="button" class="btn link small" data-act="bio-snooze">Remind me in 3 days</button></div></div>`;
+}
+
 function skiDueCard(p) {
   if (!p.ski_due) return "";
   return `<div class="card season"><strong>⛷️ Ski readiness check due</strong>
@@ -376,6 +387,7 @@ function renderTodayDone(p) {
       ${prList(d.prs)}
       <div class="row-actions"><button type="button" class="btn small" data-act="goto" data-v="history">View in History</button></div></div>
     ${p.snow_sport ? snowCard(p) : ""}
+    ${bioDueCard(p)}
     ${skiDueCard(p)}
     ${p.cooldown?.cards?.length ? `<h2>${esc(p.cooldown.title || "Cool-down")} <span class="muted">(optional)</span></h2>
     <p class="small muted" style="margin-top:0">${esc(p.cooldown.note)}</p>
@@ -578,6 +590,118 @@ function trendSection() {
     </div>`;
 }
 
+// --- Pelvic floor biofeedback: readings from each manometry session with the pelvic PT ---------------------------------
+
+function bioFmt(m, v, unit) {
+  if (v == null) return "–";
+  const n = v % 1 ? v : Math.round(v);
+  return m.unit === "pressure" ? `${n} ${unit}` : m.unit === "s" ? `${n} s` : `${n}`;
+}
+
+// Resting tone and peak squeeze over the sessions (same unit, one axis). Hover a session for its numbers.
+function bioChart(results, unit) {
+  const pts = results.filter((r) => r.unit === unit && (r.values.resting != null || r.values.peak != null));
+  if (pts.length < 2) return "";
+  const W = 340, P = 30, PR = 74, TOP = 10, H = 120, n = pts.length;
+  const vals = pts.flatMap((r) => [r.values.resting, r.values.peak]).filter((v) => v != null);
+  const max = Math.max(1, ...vals) * 1.15;
+  const x = (i) => P + (i * (W - P - PR)) / (n - 1);
+  const y = (v) => TOP + (1 - v / max) * H;
+  const line = (k) => {
+    let d = "", pen = false;
+    pts.forEach((r, i) => {
+      if (r.values[k] == null) { pen = false; return; }
+      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(r.values[k]).toFixed(1)}`;
+      pen = true;
+    });
+    return d;
+  };
+  const dots = (k, cls) => pts.map((r, i) => r.values[k] == null ? "" : `<circle class="${cls}" cx="${x(i).toFixed(1)}" cy="${y(r.values[k]).toFixed(1)}" r="4"/>`).join("");
+  const lastOf = (k) => { for (let i = n - 1; i >= 0; i--) if (pts[i].values[k] != null) return pts[i].values[k]; return null; };
+  const lr = lastOf("resting"), lp = lastOf("peak");
+  let yr = lr != null && y(lr) + 4, yp = lp != null && y(lp) + 4;
+  if (lr != null && lp != null && Math.abs(yr - yp) < 12) { const mid = (yr + yp) / 2; yp = mid - 6; yr = mid + 6; }
+  const label = (v, yy, cls, text) => v == null ? "" : `<line class="${cls}" x1="${W - PR + 6}" x2="${W - PR + 14}" y1="${yy - 4}" y2="${yy - 4}"/>
+    <text x="${W - PR + 17}" y="${yy}" class="axis-text">${text} ${v}</text>`;
+  const step = (W - P - PR) / (n - 1);
+  const hits = pts.map((r, i) => `<rect class="hit" x="${(x(i) - step / 2).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${TOP + H}">
+    <title>${esc(`${formatDate(r.date)}: resting ${r.values.resting ?? "–"}, peak ${r.values.peak ?? "–"} ${unit}`)}</title></rect>`).join("");
+  const top = Math.round(max / 1.15);
+  return `<div class="legend"><span><i class="sw-a"></i>Resting tone (lower is better)</span><span><i class="sw-b"></i>Peak squeeze</span></div>
+    <svg viewBox="0 0 ${W} ${TOP + H + 18}" role="img" aria-label="Resting tone and peak squeeze by session, in ${esc(unit)}">
+      ${[0, top].map((v) => `<line class="grid" x1="${P}" x2="${W - PR}" y1="${y(v)}" y2="${y(v)}"/>
+        <text x="${P - 4}" y="${y(v) + 4}" text-anchor="end" class="axis-text">${v}</text>`).join("")}
+      <path class="ln-a" d="${line("resting")}"/><path class="ln-b" d="${line("peak")}"/>
+      ${dots("resting", "dot-a")}${dots("peak", "dot-b")}
+      ${label(lr, yr, "ln-a", "Rest")}${label(lp, yp, "ln-b", "Peak")}
+      <text x="${P}" y="${TOP + H + 14}" class="axis-text">${esc(formatDate(pts[0].date))}</text>
+      <text x="${W - PR}" y="${TOP + H + 14}" text-anchor="end" class="axis-text">${esc(formatDate(pts[n - 1].date))}</text>
+      ${hits}
+    </svg>`;
+}
+
+// First vs latest for each reading (only sessions in the same unit as the latest are compared)
+function bioCompare(results, measures) {
+  if (!results.length) return "";
+  const unit = results[results.length - 1].unit;
+  const same = results.filter((r) => r.unit === unit);
+  const rows = measures.map((m) => {
+    const have = same.filter((r) => r.values[m.id] != null);
+    if (!have.length) return "";
+    const a = have[0].values[m.id], z = have[have.length - 1].values[m.id];
+    const d = Math.round((z - a) * 10) / 10;
+    const good = m.better === "lower" ? d < 0 : d > 0;
+    const change = have.length < 2 ? "" : d === 0 ? "same" : `${d > 0 ? "+" : ""}${bioFmt(m, d, unit)} · ${good ? "better ✓" : "not yet"}`;
+    return `<tr><td>${esc(m.name)}<div class="small muted">${m.better} is better</div></td><td>${esc(bioFmt(m, a, unit))}</td>
+      <td>${esc(bioFmt(m, z, unit))}</td><td>${esc(change)}</td></tr>`;
+  }).join("");
+  return `<table><thead><tr><th>Reading</th><th>First</th><th>Latest</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function bioSessionRow(r, measures, editable) {
+  const vals = measures.filter((m) => r.values[m.id] != null).map((m) => `${m.name}: ${bioFmt(m, r.values[m.id], r.unit)}`).join(" · ");
+  return `<li><strong>${esc(formatDate(r.date))}</strong>${vals ? ` <span class="small">${esc(vals)}</span>` : ""}
+    ${r.notes ? `<div class="small muted">${esc(r.notes)}</div>` : ""}
+    ${editable ? `<button type="button" class="btn link small" data-act="bio-edit" data-v="${esc(r.date)}">Edit</button>
+      <button type="button" class="btn link small muted-link" data-act="bio-delete" data-v="${esc(r.date)}">Delete</button>` : ""}</li>`;
+}
+
+function bioFormHtml(b) {
+  const f = state.bioForm;
+  const unitFor = (m) => (m.unit === "pressure" ? b.unit : m.unit);
+  return `<div class="ski-form" id="bio-form">
+    <label class="sub" for="bio-date">Session date</label>
+    <input type="date" id="bio-date" class="code-input" style="width:100%" data-bio="date" value="${esc(f.date)}" max="${esc(state.plan?.date || "")}">
+    <p class="small muted">Fill in whatever your PT gave you and leave the rest blank. Pressures are in ${esc(b.unit)} (change the unit in Settings).</p>
+    ${b.measures.map((m) => `<div class="ski-test">
+      <div><strong>${esc(m.name)}</strong> <span class="small muted">(${m.better} is better)</span><div class="small muted">${esc(m.help)}</div></div>
+      <div class="ski-row" style="grid-template-columns:1fr"><label><input type="number" inputmode="decimal" min="0" step="0.1" data-bio="${m.id}"
+        value="${esc(f.values[m.id] ?? "")}" aria-label="${esc(m.name)}"><span class="unit">${esc(unitFor(m))}</span></label></div></div>`).join("")}
+    <label class="sub" for="bio-notes" style="display:block;margin-top:8px">What your PT said (optional)</label>
+    <textarea id="bio-notes" data-bio="notes" placeholder="e.g. better relaxation after squeezes, keep the down-training">${esc(f.notes)}</textarea>
+    <div class="row-actions"><button type="button" class="btn primary" style="width:auto" data-act="bio-save">Save session</button>
+      <button type="button" class="btn link small" data-act="bio-cancel">Cancel</button></div></div>`;
+}
+
+function bioSection() {
+  const b = state.bio;
+  if (!b) {
+    api("api/biofeedback").then((r) => { state.bio = r; if (state.tab === "history") render(); }).catch(() => {});
+    return "";
+  }
+  if (!b.enabled && !b.results.length) return "";
+  const res = b.results;
+  const unit = res.length ? res[res.length - 1].unit : b.unit;
+  return `<h2 id="bio">Pelvic floor biofeedback</h2>
+    <div class="card chart">
+      ${res.length ? `${bioChart(res, unit)}${bioCompare(res, b.measures)}` : `<p class="sub" style="margin-top:0">No sessions logged yet. Add the readings after your next session with your pelvic PT.</p>`}
+      ${b.enabled && res.length ? `<p class="small muted">${b.due ? "Your next session is due." : `Next session around ${esc(formatDate(b.next))}.`}</p>` : ""}
+      ${state.bioForm ? bioFormHtml(b) : `<div class="row-actions"><button type="button" class="btn small" data-act="bio-new">+ Log a session</button></div>`}
+      ${res.length ? `<details class="small"><summary>All sessions (${res.length})</summary>
+        <ul class="plain" style="margin-top:8px">${[...res].reverse().map((r) => bioSessionRow(r, b.measures, true)).join("")}</ul></details>` : ""}
+    </div>`;
+}
+
 async function loadProgress(exercise) {
   state.progress = { exercise, days: (await api(`api/progress?exercise=${encodeURIComponent(exercise)}`)).days };
   const el = document.getElementById("chart");
@@ -617,7 +741,7 @@ async function renderHistory() {
   }
   const { workouts, exercises } = state.history;
   if (!workouts.length) {
-    $view.innerHTML = `<div class="empty">No completed workouts yet.<br>Press <strong>Complete workout</strong> at the end of Today to save one.</div>`;
+    $view.innerHTML = `${bioSection()}<div class="empty">No completed workouts yet.<br>Press <strong>Complete workout</strong> at the end of Today to save one.</div>`;
     return;
   }
   if (exercises.length && !exercises.includes(state.progress.exercise)) {
@@ -626,6 +750,7 @@ async function renderHistory() {
   }
   $view.innerHTML = `
     ${trendSection()}
+    ${bioSection()}
     ${exercises.length ? `<h2>Progress</h2>
     <div class="card">
       <select data-act-change="progress" aria-label="Exercise" style="width:100%;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card-2);padding:0 10px">
@@ -674,6 +799,9 @@ async function renderReport() {
     </div>
     <h2>Symptoms</h2>
     <div class="card chart">${trendBody(t)}</div>
+    ${r.biofeedback.length ? `<h2>Pelvic floor biofeedback</h2>
+    <div class="card chart">${bioChart(r.biofeedback, r.biofeedback[r.biofeedback.length - 1].unit)}${bioCompare(r.biofeedback, r.bio_measures)}
+      <ul class="plain" style="margin-top:10px">${r.biofeedback.filter((x) => x.date >= r.from).reverse().map((x) => bioSessionRow(x, r.bio_measures, false)).join("")}</ul></div>` : ""}
     <h2>Daily routine</h2>
     <div class="card">${routine}</div>
     ${r.pt_exercises.length ? `<h2>PT-prescribed exercises</h2>
@@ -1132,6 +1260,21 @@ function ptSection(list) {
     </div>`;
 }
 
+function bioSettingsCard(s) {
+  const b = s.biofeedback || {};
+  return `<h2>Pelvic floor biofeedback</h2>
+    <div class="card">
+      <label class="toggle"><input type="checkbox" data-act-change="bio-enabled" ${b.enabled ? "checked" : ""}> Track my manometric biofeedback sessions</label>
+      <p class="small muted" style="margin:2px 0 0">Log the readings from each session with your pelvic PT (resting tone, peak squeeze, hold, relaxing time).
+        History charts them, the PT report includes them, and Today reminds you when the next one is due.</p>
+      ${b.enabled ? `<div class="sub" style="margin-top:10px">Pressure unit (what your PT's screen shows)</div>
+        <div class="chips wrap">${(s.bio_units || []).map((u) => `<button type="button" class="chip${b.unit === u ? " on" : ""}" data-act="bio-setting" data-k="unit" data-v="${esc(u)}">${esc(u)}</button>`).join("")}</div>
+        <div class="sub" style="margin-top:10px">Sessions every</div>
+        <div class="chips wrap">${[7, 14, 21, 28].map((d) => `<button type="button" class="chip${b.every_days === d ? " on" : ""}" data-act="bio-setting" data-k="every_days" data-v="${d}">${d === 7 ? "week" : `${d / 7} weeks`}</button>`).join("")}</div>
+        <div class="row-actions"><button type="button" class="btn small" data-act="bio-go">Log a session</button></div>` : ""}
+    </div>`;
+}
+
 const isInstalled = () => window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
 
 function installCard() {
@@ -1167,6 +1310,7 @@ async function renderSettings() {
   const sports = new Set(s.sports);
   $view.innerHTML = `
     ${ptSection(s.pt_exercises || [])}
+    ${bioSettingsCard(s)}
     <h2>Sports</h2>
     <div class="card">
       <p class="sub" style="margin:0 0 10px">What you're training for. Your daily extras and the coach follow this. Everything still goes through your kidney and pelvic-floor safety filter.</p>
@@ -1550,6 +1694,59 @@ const actions = {
     });
     rerenderCard(`s:${name}`);
     scheduleSave();
+  },
+  "bio-go"() {
+    state.bioForm = { date: state.plan?.date || "", values: {}, notes: "" };
+    state.bio = null;
+    history.replaceState(null, "", "#history");
+    showTab("history");
+    setTimeout(() => document.getElementById("bio-form")?.scrollIntoView({ block: "start" }), 600);
+  },
+  "bio-new"() { state.bioForm = { date: state.plan?.date || "", values: {}, notes: "" }; render(); },
+  "bio-cancel"() { state.bioForm = null; render(); },
+  "bio-edit"(el) {
+    const r = state.bio.results.find((x) => x.date === el.dataset.v);
+    if (!r) return;
+    state.bioForm = { date: r.date, values: { ...r.values }, notes: r.notes, editing: r.date };
+    render();
+    setTimeout(() => document.getElementById("bio-form")?.scrollIntoView({ block: "start" }), 100);
+  },
+  async "bio-save"(el) {
+    const f = state.bioForm;
+    const values = {};
+    for (const [k, v] of Object.entries(f.values)) if (num(v) != null) values[k] = num(v);
+    el.disabled = true;
+    try {
+      if (f.editing && f.editing !== f.date) await api(`api/biofeedback/${encodeURIComponent(f.editing)}`, { method: "DELETE" });
+      state.bio = await api("api/biofeedback", { method: "POST", body: JSON.stringify({ date: f.date, values, notes: f.notes }) });
+      state.bioForm = null;
+      state.report = null;
+      refreshPlan().catch(() => {});
+      render();
+      toast("Biofeedback session saved 🎯");
+    } catch (err) {
+      toast(err.status === 400 ? "Enter at least one reading (and a date that isn't in the future)" : "Couldn't save the session");
+      el.disabled = false;
+    }
+  },
+  async "bio-delete"(el) {
+    if (!confirm(`Delete the session on ${formatDate(el.dataset.v)}?`)) return;
+    try {
+      state.bio = await api(`api/biofeedback/${encodeURIComponent(el.dataset.v)}`, { method: "DELETE" });
+      refreshPlan().catch(() => {});
+      render();
+    } catch { toast("Couldn't delete it"); }
+  },
+  async "bio-snooze"() {
+    try {
+      await api("api/biofeedback/snooze", { method: "POST", body: JSON.stringify({ days: 3 }) });
+      await refreshPlan();
+      toast("I'll remind you in 3 days");
+    } catch { toast("Couldn't snooze it"); }
+  },
+  async "bio-setting"(el) {
+    const v = el.dataset.k === "every_days" ? Number(el.dataset.v) : el.dataset.v;
+    await saveBioSettings({ [el.dataset.k]: v });
   },
   "ski-go"() { state.skiOpen = true; history.replaceState(null, "", "#week"); showTab("week"); },
   "ski-toggle"() { state.skiOpen = !state.skiOpen; render(); },
@@ -1948,6 +2145,16 @@ const actions = {
   },
 };
 
+async function saveBioSettings(patch) {
+  try {
+    state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ biofeedback: { ...state.settings.biofeedback, ...patch } }) });
+    state.bio = null;
+    refreshPlan().catch(() => {});
+    toast("Saved");
+  } catch { toast("Couldn't save"); }
+  renderSettings();
+}
+
 async function savePt(list, message) {
   try {
     state.settings = await api("api/settings", { method: "PUT", body: JSON.stringify({ pt_exercises: list }) });
@@ -1978,6 +2185,10 @@ $view.addEventListener("input", (e) => {
       if (box) box.value = t.value;
     }
     scheduleSave();
+  } else if (t.dataset.bio && state.bioForm) {
+    const k = t.dataset.bio;
+    if (k === "date" || k === "notes") state.bioForm[k] = t.value;
+    else state.bioForm.values[k] = t.value;
   } else if (t.dataset.pt && state.ptForm) {
     state.ptForm[t.dataset.pt] = t.value;
   } else if (t.dataset.ski) {
@@ -2020,6 +2231,7 @@ $view.addEventListener("change", (e) => {
       })
       .catch(() => toast("Couldn't save"));
   }
+  else if (t.dataset.actChange === "bio-enabled") saveBioSettings({ enabled: t.checked });
   else if (t.dataset.actChange === "voice") {
     state.voice = t.value;
     state.audio = null;
@@ -2088,7 +2300,7 @@ function showTab(tab) {
   state.tab = tab;
   const highlight = MORE_TABS.includes(tab) ? "more" : tab;
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === highlight));
-  if (tab === "history") { state.history = null; state.trends = null; }   // always fresh
+  if (tab === "history") { state.history = null; state.trends = null; state.bio = null; }   // always fresh
   if (tab === "report") state.report = null;
   if (tab === "week") state.ski = null;
   render();

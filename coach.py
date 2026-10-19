@@ -74,6 +74,7 @@ def training_data(days=21):
                            "avg_hr, max_hr FROM garmin_metrics ORDER BY id DESC LIMIT 14")
               or _table(conn, "SELECT date, resting_hr, latest_activity_type, duration_secs, avg_hr, max_hr FROM garmin_metrics "
                               "ORDER BY id DESC LIMIT 14"))  # older databases have no hrv/sleep columns
+    bio = _table(conn, "SELECT date, data, unit, notes FROM biofeedback ORDER BY date DESC LIMIT 6")
     conn.close()
 
     def section(title, rows, empty):
@@ -86,6 +87,10 @@ def training_data(days=21):
         section("Completed sets", sets, "no sets logged in this period."),
         section("Garmin metrics", garmin, "none. The Garmin sync has not stored anything yet, so tell Joe the Garmin "
                                            "connection still needs setting up (do not guess his heart rate)."),
+        section("Pelvic floor manometric biofeedback with his pelvic PT, about every two weeks (data keys: resting = "
+                "resting tone, peak = max squeeze, hold = endurance seconds, relax = seconds to return to rest, quick = "
+                "quick flicks in 10 s, rest_end = resting tone after down-training). His floor is hypertonic, so falling "
+                "resting tone and faster relaxing are the main signs of progress", bio, "none logged yet."),
     ])
 
 
